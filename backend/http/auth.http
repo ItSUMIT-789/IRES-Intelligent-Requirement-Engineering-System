@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:8080
+@email = client-{{$timestamp}}@example.com
+@password = Development123
+
+### Register (server assigns CLIENT role)
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "IRES",
+  "lastName": "Client",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Set the token returned by login before running this request
+@token = paste-login-token-here
+
+### Current user
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{token}}
+
+### Unauthorized current user request
+GET {{baseUrl}}/api/v1/auth/me

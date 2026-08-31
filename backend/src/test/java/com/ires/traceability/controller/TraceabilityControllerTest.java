@@ -1,0 +1,81 @@
+package com.ires.traceability.controller;
+
+import com.ires.auth.security.CustomUserDetailsService;
+import com.ires.auth.security.JwtAuthenticationFilter;
+import com.ires.auth.security.JwtService;
+import com.ires.common.exception.GlobalExceptionHandler;
+import com.ires.config.SecurityConfig;
+import com.ires.requirement.criteria.repository.AcceptanceCriteriaRepository;
+import com.ires.requirement.repository.RequirementRepository;
+import com.ires.requirement.service.RequirementService;
+import com.ires.story.repository.UserStoryRepository;
+import com.ires.traceability.service.TraceabilityService;
+import com.ires.user.service.UserService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(TraceabilityController.class)
+@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+class TraceabilityControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private TraceabilityService traceabilityService;
+
+    @MockBean
+    private RequirementService requirementService;
+
+    @MockBean
+    private AuthenticationManager authenticationManager;
+
+    @MockBean
+    private JwtService jwtService;
+
+    @MockBean
+    private UserService userService;
+
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RequirementRepository requirementRepository;
+
+    @MockBean
+    private UserStoryRepository userStoryRepository;
+
+    @MockBean
+    private AcceptanceCriteriaRepository criteriaRepository;
+
+    @Test
+    void traceabilityEndpointRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/requirements/" + UUID.randomUUID() + "/traceability"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void allowsAuthenticatedTraceabilityRead() throws Exception {
+        when(traceabilityService.list(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        mockMvc.perform(get("/api/v1/requirements/" + UUID.randomUUID() + "/traceability")
+                        .with(user("owner@example.com").roles("CLIENT")))
+                .andExpect(status().isOk());
+    }
+}

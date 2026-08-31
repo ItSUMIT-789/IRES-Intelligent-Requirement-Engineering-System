@@ -1,0 +1,72 @@
+package com.ires.ai.controller;
+
+import com.ires.ai.service.RequirementAIAnalysisService;
+import com.ires.auth.security.CustomUserDetailsService;
+import com.ires.auth.security.JwtAuthenticationFilter;
+import com.ires.auth.security.JwtService;
+import com.ires.common.exception.GlobalExceptionHandler;
+import com.ires.config.SecurityConfig;
+import com.ires.requirement.service.RequirementService;
+import com.ires.user.service.UserService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+
+@WebMvcTest(RequirementAIAnalysisController.class)
+@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+class RequirementAIAnalysisControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private RequirementAIAnalysisService analysisService;
+
+    @MockBean
+    private AuthenticationManager authenticationManager;
+
+    @MockBean
+    private JwtService jwtService;
+
+    @MockBean
+    private UserService userService;
+
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RequirementService requirementService;
+
+    @Test
+    void analysisEndpointRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/requirements/" + UUID.randomUUID() + "/ai-analysis"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void allowsBusinessAnalystAnalysisAccess() throws Exception {
+        mockMvc.perform(get("/api/v1/requirements/" + UUID.randomUUID() + "/ai-analysis")
+                        .with(user("analyst@example.com").roles("BUSINESS_ANALYST")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsClientAnalysisAccess() throws Exception {
+        mockMvc.perform(get("/api/v1/requirements/" + UUID.randomUUID() + "/ai-analysis")
+                        .with(user("client@example.com").roles("CLIENT")))
+                .andExpect(status().isForbidden());
+    }
+}
