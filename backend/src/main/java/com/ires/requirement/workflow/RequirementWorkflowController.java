@@ -20,21 +20,31 @@ public class RequirementWorkflowController {
     public ApiResponse<RequirementResponse> submit(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.SUBMITTED, p); }
     @PostMapping("/start-analysis") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")
     public ApiResponse<RequirementResponse> startAnalysis(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.IN_ANALYSIS, p); }
-    @PostMapping("/approve") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")
-    public ApiResponse<RequirementResponse> approve(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.APPROVED_FOR_DEVELOPMENT, p); }
-    @PostMapping("/assign-developer") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")
+    @PostMapping("/resume-analysis") @PreAuthorize("hasRole('BUSINESS_ANALYST')")
+    public ApiResponse<RequirementResponse> resumeAnalysis(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return ApiResponse.success("Requirement analysis resumed.", workflow.resumeAnalysis(id, p)); }
+    @PostMapping("/analysis-complete") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")
+    public ApiResponse<RequirementResponse> analysisComplete(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.ANALYSIS_COMPLETED, p); }
+    @PostMapping("/send-to-admin") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")
+    public ApiResponse<RequirementResponse> sendToAdmin(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.WAITING_FOR_ADMIN_ASSIGNMENT, p); }
+    @PostMapping("/assign-developer") @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<RequirementResponse> assignDeveloper(@PathVariable UUID id, @Valid @RequestBody RequirementAssignmentRequest r, @AuthenticationPrincipal UserDetails p) { return ApiResponse.success("Developer assigned.", workflow.assignDeveloper(id, r.developerId(), p)); }
     @PostMapping("/start-development") @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER')")
     public ApiResponse<RequirementResponse> startDevelopment(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.IN_DEVELOPMENT, p); }
+    @PostMapping("/return-to-development") @PreAuthorize("hasRole('DEVELOPER')")
+    public ApiResponse<RequirementResponse> returnToDevelopment(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return ApiResponse.success("Requirement returned to development.", workflow.returnToDevelopment(id, p)); }
     @PostMapping("/ready-for-testing") @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER')")
     public ApiResponse<RequirementResponse> ready(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.READY_FOR_TESTING, p); }
-    @PostMapping("/start-testing") @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
+    @PostMapping("/assign-tester") @PreAuthorize("hasRole('DEVELOPER')")
+    public ApiResponse<RequirementResponse> assignTester(@PathVariable UUID id, @Valid @RequestBody TesterAssignmentRequest r, @AuthenticationPrincipal UserDetails p) { return ApiResponse.success("Tester assigned.", workflow.assignTester(id, r.testerId(), p)); }
+    @PostMapping("/start-testing") @PreAuthorize("hasRole('TESTER')")
     public ApiResponse<RequirementResponse> startTesting(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.IN_TESTING, p); }
-    @PostMapping("/pass") @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
-    public ApiResponse<RequirementResponse> pass(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.PASSED, p); }
-    @PostMapping("/fail") @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
-    public ApiResponse<RequirementResponse> fail(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.FAILED, p); }
-    @PostMapping("/complete") @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
+    @PostMapping("/pass") @PreAuthorize("hasRole('TESTER')")
+    public ApiResponse<RequirementResponse> pass(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.TEST_PASSED, p); }
+    @PostMapping("/fail") @PreAuthorize("hasRole('TESTER')")
+    public ApiResponse<RequirementResponse> fail(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.TEST_FAILED, p); }
+    @PostMapping("/send-for-approval") @PreAuthorize("hasRole('TESTER')")
+    public ApiResponse<RequirementResponse> sendForApproval(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.WAITING_FOR_ADMIN_APPROVAL, p); }
+    @PostMapping("/complete") @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<RequirementResponse> complete(@PathVariable UUID id, @AuthenticationPrincipal UserDetails p) { return action(id, RequirementStatus.COMPLETED, p); }
 
     @PostMapping("/request-clarification") @PreAuthorize("hasAnyRole('ADMIN','BUSINESS_ANALYST')")

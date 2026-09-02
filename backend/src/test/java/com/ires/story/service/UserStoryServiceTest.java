@@ -109,7 +109,7 @@ class UserStoryServiceTest {
         creator.setId(UUID.randomUUID());
         Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, creator);
         Requirement requirement = new Requirement(project, "Guest checkout", "Allow guest checkout.",
-                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.APPROVED_FOR_DEVELOPMENT,
+                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.ANALYSIS_COMPLETED,
                 "client", creator, null);
         requirement.setId(UUID.randomUUID());
         return requirement;

@@ -8,11 +8,23 @@ export default {
         body: ['Inter', 'sans-serif'],
       },
       colors: {
+        brand: {
+          green: '#15803D',
+          dark: '#166534',
+          soft: '#DCFCE7',
+          pale: '#F0FDF4',
+          yellow: '#FACC15',
+          amber: '#CA8A04',
+          ink: '#17211B',
+          muted: '#647067',
+          border: '#E5E7EB',
+          canvas: '#F8FAF7',
+        },
         space: {
-          950: '#05060f',
-          900: '#0a0e1c',
-          800: '#0d1224',
-          700: '#121834',
+          950: '#F8FAF7',
+          900: '#FFFFFF',
+          800: '#F3F5F3',
+          700: '#E5E7EB',
         },
         aurora: {
           blue: '#3b82f6',
@@ -68,8 +80,8 @@ export default {
         'pulse-glow': 'pulse-glow 3.5s ease-in-out infinite',
       },
       boxShadow: {
-        glow: '0 0 40px -10px rgba(139, 92, 246, 0.45)',
-        'glow-blue': '0 0 40px -10px rgba(59, 130, 246, 0.45)',
+        glow: '0 1px 3px rgba(23, 33, 27, 0.10)',
+        'glow-blue': '0 1px 3px rgba(23, 33, 27, 0.10)',
       },
     },
   },

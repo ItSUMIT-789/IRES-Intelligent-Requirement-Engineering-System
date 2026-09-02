@@ -2,74 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --ires-bg: #f8faf7;
+  --ires-surface: #ffffff;
+  --ires-green: #15803d;
+  --ires-green-dark: #166534;
+  --ires-green-soft: #dcfce7;
+  --ires-yellow: #facc15;
+  --ires-yellow-soft: #fef9c3;
+  --ires-ink: #17211b;
+  --ires-muted: #647067;
+  --ires-border: #e5e7eb;
+}
+
 @layer base {
-  html {
-    scroll-behavior: smooth;
+  html { scroll-behavior: smooth; }
+  body { @apply bg-[#F8FAF7] font-body text-[#17211B] antialiased; }
+  h1, h2, h3, h4, h5, h6 { @apply font-display text-[#17211B]; }
+  ::selection { @apply bg-yellow-200 text-green-950; }
+  :focus-visible { outline: 2px solid #15803d; outline-offset: 3px; }
+
+  input:not([type='checkbox']):not([type='radio']), select, textarea {
+    background-color: #fff !important;
+    border-color: #d1d5db !important;
+    color: #17211b !important;
+  }
+  input::placeholder, textarea::placeholder { color: #9ca3af !important; }
+  input:focus, select:focus, textarea:focus {
+    border-color: #15803d !important;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, .12) !important;
   }
 
-  body {
-    @apply bg-space-950 text-slate-100 font-body antialiased;
-  }
+  table { background: #fff; }
+  thead { background: #f0fdf4 !important; color: #526057 !important; }
+  tbody tr { border-color: #e5e7eb !important; background: #fff; }
+  tbody tr:hover { background: #f0fdf4; }
+  th { color: #526057 !important; font-weight: 600; }
+  td { color: #4b5563; }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
-  }
-
-  ::selection {
-    @apply bg-aurora-violet/40 text-white;
-  }
-
-  ::-webkit-scrollbar {
-    width: 10px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #05060f;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #6366f1, #a855f7);
-    border-radius: 999px;
-  }
-
-  :focus-visible {
-    outline: 2px solid #a855f7;
-    outline-offset: 3px;
-  }
+  ::-webkit-scrollbar { width: 10px; height: 12px; }
+  ::-webkit-scrollbar-track { background: #edf1ed; }
+  ::-webkit-scrollbar-thumb { background: #9ac8a8; border: 2px solid #edf1ed; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #15803d; }
 }
 
 @layer components {
-  .glass {
-    @apply bg-white/[0.06] backdrop-blur-xl border border-white/10;
+  .glass, .glass-strong {
+    background: #fff !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: 0 1px 2px rgba(23, 33, 27, .04), 0 4px 14px rgba(23, 33, 27, .035) !important;
+    backdrop-filter: none !important;
   }
 
-  .glass-strong {
-    @apply bg-white/[0.09] backdrop-blur-2xl border border-white/[0.14];
-  }
-
-  .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400;
-  }
+  .gradient-text { color: #15803d !important; background: none !important; }
 
   .btn-gradient {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3
-      font-semibold text-white bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500
-      shadow-glow transition-all duration-300 hover:shadow-glow hover:brightness-110
-      hover:-translate-y-0.5 active:translate-y-0
-      disabled:pointer-events-none disabled:opacity-60 disabled:hover:translate-y-0;
+    @apply relative inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 font-semibold text-white transition-colors duration-200 disabled:pointer-events-none;
+    background: #15803d !important;
+    box-shadow: none !important;
+    transform: none !important;
   }
+  .btn-gradient:hover { background: #166534 !important; }
+  .btn-gradient:disabled { background: #e5e7eb !important; color: #8a948d !important; }
 
   .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-semibold
-      text-slate-100 border border-white/20 bg-white/5 backdrop-blur-md
-      transition-all duration-300 hover:bg-white/10 hover:border-white/30 hover:-translate-y-0.5
-      disabled:pointer-events-none disabled:opacity-60 disabled:hover:translate-y-0;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border px-6 py-3 font-semibold transition-colors duration-200 disabled:pointer-events-none;
+    background: #fff !important;
+    border-color: #bbd9c4 !important;
+    color: #166534 !important;
+    box-shadow: none !important;
+    transform: none !important;
   }
+  .btn-outline:hover { background: #f0fdf4 !important; border-color: #15803d !important; }
+  .btn-outline:disabled { background: #f3f5f3 !important; border-color: #e5e7eb !important; color: #8a948d !important; }
+
+  .table-scroll, .overflow-x-auto {
+    width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch;
+    scrollbar-color: #72aa82 #edf1ed; scrollbar-width: auto;
+  }
+  .table-scroll::-webkit-scrollbar, .overflow-x-auto::-webkit-scrollbar { height: 12px; }
+  .table-scroll::-webkit-scrollbar-track, .overflow-x-auto::-webkit-scrollbar-track { background: #edf1ed; border-radius: 999px; }
+  .table-scroll::-webkit-scrollbar-thumb, .overflow-x-auto::-webkit-scrollbar-thumb { background: #72aa82; border: 2px solid #edf1ed; border-radius: 999px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+/* Compatibility layer for existing role pages while keeping their behavior intact. */
+@layer utilities {
+  .text-white, .text-slate-100 { color: #17211b !important; }
+  .text-slate-200, .text-slate-300 { color: #455149 !important; }
+  .text-slate-400 { color: #647067 !important; }
+  .text-slate-500 { color: #7b867e !important; }
+  .text-blue-200, .text-blue-300, .text-purple-200, .text-purple-300, .text-cyan-300 { color: #15803d !important; }
+  .text-red-300 { color: #dc2626 !important; }
+  .text-amber-300 { color: #a16207 !important; }
+  .bg-space-950, .bg-space-900, .bg-space-800, .bg-space-700 { background-color: #fff !important; }
+  .border-white\/5, .border-white\/10, .border-white\/20, .border-white\/30, .border-white\/\[\.07\], .border-white\/\[\.14\] { border-color: #e5e7eb !important; }
+  .bg-white\/5, .bg-white\/10, .bg-white\/\[0\.03\], .bg-white\/\[0\.04\], .bg-white\/\[0\.06\], .bg-white\/\[0\.07\], .bg-white\/\[0\.09\], .bg-white\/\[\.06\] { background-color: #fff !important; }
+  .hover\:bg-white\/5:hover, .hover\:bg-white\/10:hover, .hover\:bg-white\/\[0\.09\]:hover { background-color: #f0fdf4 !important; }
+  .shadow-black\/20, .shadow-black\/30, .shadow-black\/40 { --tw-shadow-color: transparent !important; }
+  .from-blue-500, .from-blue-600\/30 { --tw-gradient-from: #15803d var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(21 128 61 / 0) var(--tw-gradient-to-position) !important; }
+  .via-indigo-500, .via-indigo-600\/20 { --tw-gradient-to: rgb(22 101 52 / 0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), #166534 var(--tw-gradient-via-position), var(--tw-gradient-to) !important; }
+  .to-purple-400, .to-purple-500, .to-purple-600\/30 { --tw-gradient-to: #facc15 var(--tw-gradient-to-position) !important; }
 }
+
+/* Primary controls keep white text despite the legacy text utility compatibility rules. */
+.btn-gradient, .btn-gradient *, .bg-green-700, .bg-green-700 * { color: #fff !important; }
+.sticky.right-0 { background-color: #fff !important; box-shadow: -8px 0 12px -12px rgba(23, 33, 27, .35); }

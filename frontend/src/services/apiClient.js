@@ -26,11 +26,22 @@ async function request(path, options = {}) {
   return payload
 }
 
+async function download(path) {
+  const headers = new Headers()
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers })
+  if (!response.ok) throw new Error(`Download failed with status ${response.status}.`)
+  return response.blob()
+}
+
 export const apiClient = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
+  postForm: (path, body) => request(path, { method: 'POST', body }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  download,
 }
 
 export { API_BASE_URL, TOKEN_KEY }

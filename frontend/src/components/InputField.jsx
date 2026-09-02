@@ -9,7 +9,7 @@ export default function InputField({ label, icon: Icon, type = 'text', id, ...pr
   return (
     <div>
       {label && (
-        <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-300">
+        <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-700">
           {label}
         </label>
       )}
@@ -17,15 +17,15 @@ export default function InputField({ label, icon: Icon, type = 'text', id, ...pr
         {Icon && (
           <Icon
             size={17}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-blue-300"
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-green-700"
           />
         )}
         <input
           id={id}
           type={inputType}
-          className={`w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-sm text-slate-100
-            placeholder:text-slate-500 outline-none transition-all duration-200
-            focus:border-blue-400/60 focus:bg-white/[0.07] focus:ring-2 focus:ring-blue-500/20
+          className={`w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm text-slate-900
+            placeholder:text-slate-400 outline-none transition-all duration-200
+            focus:border-green-600 focus:ring-2 focus:ring-green-100
             ${Icon ? 'pl-10' : 'pl-4'} ${isPassword ? 'pr-10' : 'pr-4'}`}
           {...props}
         />

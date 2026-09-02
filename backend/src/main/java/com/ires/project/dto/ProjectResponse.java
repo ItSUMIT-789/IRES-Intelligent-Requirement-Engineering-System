@@ -15,6 +15,7 @@ public record ProjectResponse(
         LocalDate startDate,
         LocalDate endDate,
         UserSummary client,
+        long requirementCount,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -28,8 +29,16 @@ public record ProjectResponse(
                 project.getStartDate(),
                 project.getEndDate(),
                 UserSummary.from(project.getClient()),
+                0,
                 project.getCreatedAt(),
                 project.getUpdatedAt()
         );
+    }
+
+    public static ProjectResponse from(Project project, long requirementCount) {
+        ProjectResponse response = from(project);
+        return new ProjectResponse(response.id(), response.name(), response.description(), response.status(),
+                response.startDate(), response.endDate(), response.client(), requirementCount,
+                response.createdAt(), response.updatedAt());
     }
 }

@@ -13,7 +13,6 @@ import com.ires.requirement.entity.RequirementStatus;
 import com.ires.requirement.entity.RequirementType;
 import com.ires.requirement.repository.RequirementRepository;
 import com.ires.user.entity.User;
-import com.ires.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,22 +24,25 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RequirementService {
 
+    private static final Set<RequirementStatus> ANALYST_QUEUE_STATUSES = Set.of(
+            RequirementStatus.SUBMITTED, RequirementStatus.IN_ANALYSIS,
+            RequirementStatus.NEEDS_CLARIFICATION, RequirementStatus.ANALYSIS_COMPLETED);
+
     private final RequirementRepository requirementRepository;
     private final ProjectService projectService;
-    private final UserRepository userRepository;
 
     @Transactional
     public RequirementResponse create(UUID projectId, RequirementCreateRequest request, UserDetails principal) {
         Project project = projectService.findProject(projectId);
-        projectService.assertCanView(project, principal);
+        projectService.assertCanManage(project, principal);
         User creator = projectService.currentUser(principal);
-        assertCanSetStatus(request.status(), principal);
         User assignee = null;
         Requirement requirement = new Requirement(
                 project,
@@ -70,15 +72,52 @@ public class RequirementService {
         return requirementRepository.findAll(specification, pageable).map(RequirementResponse::from);
     }
 
+    public Page<RequirementResponse> listAccessible(
+            UUID projectId, RequirementStatus status, RequirementPriority priority, String search,
+            Pageable pageable, UserDetails principal
+    ) {
+        User user = projectService.currentUser(principal);
+        Specification<Requirement> specification = accessibleRequirements(
+                user, projectService.isAdmin(principal), hasRole(principal, "ROLE_DEVELOPER"), projectId, status, priority, search);
+        return requirementRepository.findAll(specification, pageable).map(RequirementResponse::from);
+    }
+
+    public Page<RequirementResponse> listAnalystQueue(
+            UUID projectId, RequirementStatus status, RequirementPriority priority, String search,
+            Pageable pageable, UserDetails principal
+    ) {
+        if (!hasRole(principal, "ROLE_BUSINESS_ANALYST")) {
+            throw new ForbiddenException("Only Business Analysts can access the shared analyst queue.");
+        }
+        if (status != null && !ANALYST_QUEUE_STATUSES.contains(status)) {
+            return Page.empty(pageable);
+        }
+        Specification<Requirement> specification = byAnalystQueueFilters(projectId, status, priority, search);
+        return requirementRepository.findAll(specification, pageable).map(RequirementResponse::from);
+    }
+
+    public Requirement findForAnalystClaim(UUID id, UserDetails principal) {
+        if (!hasRole(principal, "ROLE_BUSINESS_ANALYST")) {
+            throw new ForbiddenException("Only Business Analysts can claim submitted requirements.");
+        }
+        Requirement requirement = findRequirement(id);
+        if (requirement.getStatus() != RequirementStatus.SUBMITTED) {
+            throw new ForbiddenException("Only submitted requirements can be claimed from the analyst queue.");
+        }
+        return requirement;
+    }
+
     public RequirementResponse get(UUID id, UserDetails principal) {
         Requirement requirement = findRequirement(id);
         projectService.assertCanView(requirement.getProject(), principal);
+        assertDeveloperAssignment(requirement, principal);
         return RequirementResponse.from(requirement);
     }
 
     public Requirement findAccessibleRequirement(UUID id, UserDetails principal) {
         Requirement requirement = findRequirement(id);
         projectService.assertCanView(requirement.getProject(), principal);
+        assertDeveloperAssignment(requirement, principal);
         return requirement;
     }
 
@@ -86,7 +125,6 @@ public class RequirementService {
     public RequirementResponse update(UUID id, RequirementUpdateRequest request, UserDetails principal) {
         Requirement requirement = findRequirement(id);
         assertCanEdit(requirement, principal);
-        assertCanSetStatus(request.status(), principal);
         requirement.setTitle(request.title().trim());
         requirement.setDescription(request.description());
         requirement.setRequirementType(defaultType(request.requirementType()));
@@ -135,23 +173,6 @@ public class RequirementService {
         }
     }
 
-    private void assertCanSetStatus(RequirementStatus status, UserDetails principal) {
-        if (status != RequirementStatus.APPROVED_FOR_DEVELOPMENT) return;
-        boolean analyst = principal.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_BUSINESS_ANALYST".equals(authority.getAuthority()));
-        if (!projectService.isAdmin(principal) && !analyst) {
-            throw new ForbiddenException("Only business analysts or admins can approve requirements.");
-        }
-    }
-
-    private User findOptionalUser(UUID userId) {
-        if (userId == null) {
-            return null;
-        }
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Assigned user not found."));
-    }
-
     private Specification<Requirement> byProjectAndFilters(
             UUID projectId,
             RequirementStatus status,
@@ -173,6 +194,59 @@ public class RequirementService {
             }
             return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
+    }
+
+    private Specification<Requirement> accessibleRequirements(
+            User user, boolean admin, boolean developer, UUID projectId, RequirementStatus status,
+            RequirementPriority priority, String search
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            if (query != null) query.distinct(true);
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (!admin) {
+                var members = root.join("project").join("members", jakarta.persistence.criteria.JoinType.LEFT);
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.equal(root.get("project").get("client"), user),
+                        criteriaBuilder.equal(members.get("user"), user)
+                ));
+            }
+            if (!admin && developer) {
+                predicates.add(criteriaBuilder.equal(root.get("assignedTo"), user));
+            }
+            if (projectId != null) predicates.add(criteriaBuilder.equal(root.get("project").get("id"), projectId));
+            if (status != null) predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            if (priority != null) predicates.add(criteriaBuilder.equal(root.get("priority"), priority));
+            if (search != null && !search.isBlank()) predicates.add(criteriaBuilder.like(
+                    criteriaBuilder.lower(root.get("title")), "%" + search.trim().toLowerCase() + "%"));
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+    }
+
+    private Specification<Requirement> byAnalystQueueFilters(
+            UUID projectId, RequirementStatus status, RequirementPriority priority, String search
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (status == null) predicates.add(root.get("status").in(ANALYST_QUEUE_STATUSES));
+            else predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            if (projectId != null) predicates.add(criteriaBuilder.equal(root.get("project").get("id"), projectId));
+            if (priority != null) predicates.add(criteriaBuilder.equal(root.get("priority"), priority));
+            if (search != null && !search.isBlank()) predicates.add(criteriaBuilder.like(
+                    criteriaBuilder.lower(root.get("title")), "%" + search.trim().toLowerCase() + "%"));
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+    }
+
+    private void assertDeveloperAssignment(Requirement requirement, UserDetails principal) {
+        if (!hasRole(principal, "ROLE_DEVELOPER")) return;
+        User user = projectService.currentUser(principal);
+        if (requirement.getAssignedTo() == null || !requirement.getAssignedTo().getId().equals(user.getId())) {
+            throw new ForbiddenException("Developers can only access requirements assigned to them.");
+        }
+    }
+
+    private boolean hasRole(UserDetails principal, String role) {
+        return principal.getAuthorities().stream().anyMatch(authority -> role.equals(authority.getAuthority()));
     }
 
     private RequirementType defaultType(RequirementType type) {

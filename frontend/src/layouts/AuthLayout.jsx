@@ -12,12 +12,10 @@ export default function AuthLayout({ children, title, subtitle }) {
   return (
     <div className="relative flex min-h-screen items-stretch">
       {/* left panel */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/30 via-indigo-600/20 to-purple-600/30" />
-        <div className="absolute inset-0 bg-grid-glow bg-grid opacity-20 [mask-image:radial-gradient(ellipse_70%_70%_at_30%_30%,#000_10%,transparent_75%)]" />
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-green-100 bg-green-50 p-12 lg:flex">
 
         <Link to="/" className="relative z-10 flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-glow">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-700">
             <Sparkles size={18} className="text-white" />
           </span>
           <span className="font-display text-lg font-semibold text-white">
@@ -44,7 +42,7 @@ export default function AuthLayout({ children, title, subtitle }) {
                 transition={{ delay: 0.2 + i * 0.15, duration: 0.5 }}
                 className="glass flex items-center gap-3 rounded-xl px-4 py-3"
               >
-                <Icon size={18} className="text-cyan-300 shrink-0" />
+                <Icon size={18} className="shrink-0 text-green-700" />
                 <span className="text-sm text-slate-200">{text}</span>
               </motion.div>
             ))}
@@ -62,10 +60,10 @@ export default function AuthLayout({ children, title, subtitle }) {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="glass-strong w-full max-w-md rounded-2xl p-8 shadow-2xl shadow-black/40 sm:p-10"
+          className="glass-strong w-full max-w-md rounded-xl p-8 sm:p-10"
         >
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-700">
               <Sparkles size={16} className="text-white" />
             </span>
             <span className="font-display text-base font-semibold text-white">

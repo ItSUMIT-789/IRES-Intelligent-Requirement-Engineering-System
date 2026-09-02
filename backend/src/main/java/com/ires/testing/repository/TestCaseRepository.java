@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.UUID;
+import java.util.List;
 import com.ires.testing.entity.TestCaseStatus;
 import java.util.Collection;
 import org.springframework.data.jpa.repository.Query;
@@ -19,4 +20,5 @@ public interface TestCaseRepository extends JpaRepository<TestCase, UUID>, JpaSp
             "where (t.project.client.id = :userId or m.user.id = :userId) and t.status in :statuses")
     long countAccessibleToByStatusIn(@Param("userId") UUID userId, @Param("statuses") Collection<TestCaseStatus> statuses);
     boolean existsByRequirementIdAndAssignedToId(UUID requirementId, UUID userId);
+    List<TestCase> findByRequirementId(UUID requirementId);
 }

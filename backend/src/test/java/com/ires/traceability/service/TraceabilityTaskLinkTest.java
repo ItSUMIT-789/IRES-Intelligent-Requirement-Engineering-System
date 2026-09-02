@@ -20,6 +20,7 @@ import com.ires.traceability.repository.TraceabilityLinkRepository;
 import com.ires.user.entity.User;
 import com.ires.requirement.criteria.repository.AcceptanceCriteriaRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -32,9 +33,16 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class TraceabilityTaskLinkTest {
+
+    @BeforeEach
+    void businessAnalystPrincipal() {
+        doReturn(java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_BUSINESS_ANALYST")))
+                .when(principal).getAuthorities();
+    }
 
     @Mock
     private TraceabilityLinkRepository linkRepository;
@@ -84,7 +92,7 @@ class TraceabilityTaskLinkTest {
         Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, owner);
         project.setId(UUID.randomUUID());
         Requirement requirement = new Requirement(project, "Guest checkout", "Details",
-                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.APPROVED_FOR_DEVELOPMENT,
+                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.ANALYSIS_COMPLETED,
                 "client", owner, null);
         requirement.setId(UUID.randomUUID());
         return requirement;

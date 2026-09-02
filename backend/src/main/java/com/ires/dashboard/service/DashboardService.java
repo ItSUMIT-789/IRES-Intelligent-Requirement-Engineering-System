@@ -62,15 +62,19 @@ public class DashboardService {
     }
 
     private List<DashboardMetric> admin() {
-        long pendingRequirements = requirementRepository.countByStatus(RequirementStatus.SUBMITTED)
-                + requirementRepository.countByStatus(RequirementStatus.IN_ANALYSIS);
+        long awaitingAssignment = requirementRepository.countByStatus(RequirementStatus.WAITING_FOR_ADMIN_ASSIGNMENT);
+        long assignedOrInDevelopment = requirementRepository.countByStatus(RequirementStatus.ASSIGNED_TO_DEVELOPER)
+                + requirementRepository.countByStatus(RequirementStatus.IN_DEVELOPMENT);
         long pendingOrFailedTests = testCaseRepository.countByStatusIn(PENDING_TESTS)
                 + executionRepository.countByExecutionStatus(ExecutionStatus.FAIL);
         return List.of(
                 metric("totalUsers", "Total Users", userRepository.count(), "No users found."),
                 metric("totalProjects", "Total Projects", projectRepository.count(), "No projects yet."),
                 metric("totalRequirements", "Total Requirements", requirementRepository.count(), "No requirements yet."),
-                metric("pendingRequirements", "Requirements Pending Review", pendingRequirements, "No requirements pending review."),
+                metric("awaitingDeveloperAssignment", "Awaiting Developer Assignment", awaitingAssignment, "No requirements awaiting assignment."),
+                metric("assignedOrInDevelopment", "Assigned / In Development", assignedOrInDevelopment, "No assigned development requirements."),
+                metric("awaitingFinalApproval", "Awaiting Final Approval", requirementRepository.countByStatus(RequirementStatus.WAITING_FOR_ADMIN_APPROVAL), "No requirements awaiting final approval."),
+                metric("completedRequirements", "Completed Requirements", requirementRepository.countByStatus(RequirementStatus.COMPLETED), "No completed requirements."),
                 metric("activeDeveloperTasks", "Active Developer Tasks", taskRepository.countByStatusIn(ACTIVE_TASKS), "No active developer tasks."),
                 metric("openBugs", "Open Bugs", bugRepository.countByStatusIn(OPEN_BUGS), "No open bugs."),
                 metric("pendingOrFailedTests", "Pending / Failed Tests", pendingOrFailedTests, "No pending or failed tests.")
@@ -78,11 +82,24 @@ public class DashboardService {
     }
 
     private List<DashboardMetric> client(User user) {
+        List<RequirementStatus> submitted = List.of(RequirementStatus.SUBMITTED, RequirementStatus.IN_ANALYSIS,
+                RequirementStatus.NEEDS_CLARIFICATION, RequirementStatus.ANALYSIS_COMPLETED,
+                RequirementStatus.WAITING_FOR_ADMIN_ASSIGNMENT, RequirementStatus.ASSIGNED_TO_DEVELOPER,
+                RequirementStatus.IN_DEVELOPMENT, RequirementStatus.READY_FOR_TESTING,
+                RequirementStatus.ASSIGNED_TO_TESTER, RequirementStatus.IN_TESTING, RequirementStatus.TEST_FAILED,
+                RequirementStatus.TEST_PASSED, RequirementStatus.WAITING_FOR_ADMIN_APPROVAL, RequirementStatus.COMPLETED);
+        List<RequirementStatus> pending = List.of(RequirementStatus.SUBMITTED, RequirementStatus.IN_ANALYSIS,
+                RequirementStatus.NEEDS_CLARIFICATION, RequirementStatus.ANALYSIS_COMPLETED,
+                RequirementStatus.WAITING_FOR_ADMIN_ASSIGNMENT);
+        List<RequirementStatus> inProgress = List.of(RequirementStatus.ASSIGNED_TO_DEVELOPER,
+                RequirementStatus.IN_DEVELOPMENT, RequirementStatus.READY_FOR_TESTING,
+                RequirementStatus.ASSIGNED_TO_TESTER, RequirementStatus.IN_TESTING, RequirementStatus.TEST_FAILED,
+                RequirementStatus.TEST_PASSED, RequirementStatus.WAITING_FOR_ADMIN_APPROVAL);
         return List.of(
                 metric("myProjects", "My Projects", projectRepository.countAccessibleTo(user.getId()), "No projects yet."),
-                metric("submittedRequirements", "Submitted Requirements", accessible(user, RequirementStatus.SUBMITTED), "No submitted requirements."),
-                metric("pendingReview", "Pending Review", accessible(user, RequirementStatus.IN_ANALYSIS), "Nothing pending review."),
-                metric("approvedRequirements", "Approved Requirements", accessible(user, RequirementStatus.APPROVED_FOR_DEVELOPMENT), "No approved requirements."),
+                metric("submittedRequirements", "Submitted Requirements", requirementRepository.countAccessibleToByStatusIn(user.getId(), submitted), "No submitted requirements."),
+                metric("pendingReview", "Pending Review", requirementRepository.countAccessibleToByStatusIn(user.getId(), pending), "Nothing pending review."),
+                metric("approvedInProgress", "Approved / In Progress", requirementRepository.countAccessibleToByStatusIn(user.getId(), inProgress), "Nothing in progress."),
                 metric("completedRequirements", "Completed Requirements", accessible(user, RequirementStatus.COMPLETED), "No completed requirements.")
         );
     }
@@ -92,7 +109,10 @@ public class DashboardService {
                 metric("awaitingAnalysis", "Requirements Awaiting Analysis", accessible(user, RequirementStatus.SUBMITTED), "No requirements awaiting analysis."),
                 metric("inReview", "Requirements In Review", accessible(user, RequirementStatus.IN_ANALYSIS), "No requirements in review."),
                 metric("needsClarification", "Requirements Needing Clarification", accessible(user, RequirementStatus.NEEDS_CLARIFICATION), "No requirements need clarification."),
-                metric("approvedForDevelopment", "Approved For Development", accessible(user, RequirementStatus.APPROVED_FOR_DEVELOPMENT), "No approved requirements."),
+                metric("sentToAdmin", "Analysis Completed / Sent to Admin",
+                        accessible(user, RequirementStatus.ANALYSIS_COMPLETED)
+                                + accessible(user, RequirementStatus.WAITING_FOR_ADMIN_ASSIGNMENT),
+                        "No completed analyses."),
                 metric("aiAnalysesPendingReview", "AI Analyses Pending Review",
                         analysisRepository.countAccessibleToByStatuses(user.getId(), List.of(AnalysisStatus.PENDING, AnalysisStatus.PROCESSING)),
                         "No AI analyses pending review.")
@@ -101,7 +121,7 @@ public class DashboardService {
 
     private List<DashboardMetric> developer(User user) {
         return List.of(
-                metric("assignedRequirements", "Assigned Requirements", requirementRepository.countByAssignedToId(user.getId()), "No assigned requirements."),
+                metric("assignedRequirements", "Assigned Requirements", requirementRepository.countByAssignedToIdAndStatusNot(user.getId(), RequirementStatus.COMPLETED), "No assigned requirements."),
                 metric("activeTasks", "Active Developer Tasks", taskRepository.countByAssignedToIdAndStatusIn(user.getId(), ACTIVE_TASKS), "No active developer tasks."),
                 metric("completedTasks", "Completed Tasks", taskRepository.countByAssignedToIdAndStatus(user.getId(), TaskStatus.COMPLETED), "No completed tasks."),
                 metric("pendingTestCases", "Test Cases Awaiting Testing", testCaseRepository.countAccessibleToByStatusIn(user.getId(), PENDING_TESTS), "No test cases awaiting testing."),
@@ -110,11 +130,16 @@ public class DashboardService {
     }
 
     private List<DashboardMetric> tester(User user) {
+        long latestPassed = executionRepository.countLatestAssignedByStatus(user.getId(), ExecutionStatus.PASS);
+        long latestFailed = executionRepository.countLatestAssignedByStatus(user.getId(), ExecutionStatus.FAIL);
+        long pending = executionRepository.countAssignedWithoutExecution(user.getId())
+                + executionRepository.countLatestAssignedByStatus(user.getId(), ExecutionStatus.NOT_RUN)
+                + executionRepository.countLatestAssignedByStatus(user.getId(), ExecutionStatus.BLOCKED);
         return List.of(
                 metric("assignedTestCases", "Assigned Test Cases", testCaseRepository.countByAssignedToId(user.getId()), "No assigned test cases yet."),
-                metric("pendingTests", "Pending Tests", testCaseRepository.countByAssignedToIdAndStatusIn(user.getId(), PENDING_TESTS), "No pending tests."),
-                metric("passedTests", "Passed Tests", executionRepository.countByExecutedByIdAndExecutionStatus(user.getId(), ExecutionStatus.PASS), "No passed tests recorded."),
-                metric("failedTests", "Failed Tests", executionRepository.countByExecutedByIdAndExecutionStatus(user.getId(), ExecutionStatus.FAIL), "No failed tests recorded."),
+                metric("pendingTests", "Pending Tests", pending, "No pending tests."),
+                metric("passedTests", "Passed Tests", latestPassed, "No currently passing tests."),
+                metric("failedTests", "Failed Tests", latestFailed, "No currently failing tests."),
                 metric("openBugsReported", "Open Bugs Reported", bugRepository.countByReportedByIdAndStatusIn(user.getId(), OPEN_BUGS), "No open bugs reported.")
         );
     }

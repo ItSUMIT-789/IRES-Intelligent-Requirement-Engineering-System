@@ -28,12 +28,12 @@ export default function Navbar() {
     >
       <div
         className={`mx-auto mt-4 max-w-6xl rounded-2xl px-5 py-3 transition-all duration-300 ${
-          scrolled ? 'glass-strong shadow-xl shadow-black/30' : 'bg-transparent'
+          scrolled ? 'border border-slate-200 bg-white shadow-sm' : 'bg-white/90'
         }`}
       >
         <nav className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-glow">
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-green-700">
               <Sparkles size={18} className="text-white" />
             </span>
             <span className="font-display text-lg font-semibold tracking-tight text-white">
@@ -46,7 +46,7 @@ export default function Navbar() {
               <a
                 key={link.label}
                 href={link.href}
-                className="text-sm font-medium text-slate-300 transition-colors hover:text-white"
+                className="text-sm font-medium text-slate-600 transition-colors hover:text-green-700"
               >
                 {link.label}
               </a>
@@ -60,7 +60,7 @@ export default function Navbar() {
           </div>
 
           <button
-            className="md:hidden rounded-lg p-2 text-slate-200 hover:bg-white/10"
+            className="rounded-lg p-2 text-slate-700 hover:bg-green-50 md:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label="Toggle menu"
           >

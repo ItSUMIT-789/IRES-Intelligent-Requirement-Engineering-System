@@ -53,7 +53,7 @@ public class Requirement {
     private RequirementPriority priority = RequirementPriority.MEDIUM;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 40)
     private RequirementStatus status = RequirementStatus.DRAFT;
 
     @Column(length = 100)

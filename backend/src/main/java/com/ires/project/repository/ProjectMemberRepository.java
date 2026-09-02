@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.ires.project.entity.ProjectMemberRole;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, UUID> {
 
@@ -16,4 +17,5 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, UU
     Optional<ProjectMember> findByProjectIdAndUserId(UUID projectId, UUID userId);
 
     void deleteByProjectIdAndUserId(UUID projectId, UUID userId);
+    List<ProjectMember> findByProjectIdAndProjectRole(UUID projectId, ProjectMemberRole projectRole);
 }

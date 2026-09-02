@@ -40,7 +40,7 @@ export default function App() {
             <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route
-            path="/admin/dashboard"
+            path="/admin/*"
             element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminDashboard />
@@ -48,7 +48,7 @@ export default function App() {
             }
           />
           <Route
-            path="/analyst/dashboard"
+            path="/analyst/*"
             element={
               <ProtectedRoute allowedRoles={['BUSINESS_ANALYST']}>
                 <AnalystDashboard />
@@ -56,7 +56,7 @@ export default function App() {
             }
           />
           <Route
-            path="/client/dashboard"
+            path="/client/*"
             element={
               <ProtectedRoute allowedRoles={['CLIENT']}>
                 <ClientDashboard />
@@ -64,7 +64,7 @@ export default function App() {
             }
           />
           <Route
-            path="/developer/dashboard"
+            path="/developer/*"
             element={
               <ProtectedRoute allowedRoles={['DEVELOPER']}>
                 <DeveloperDashboard />
@@ -72,7 +72,7 @@ export default function App() {
             }
           />
           <Route
-            path="/tester/dashboard"
+            path="/tester/*"
             element={
               <ProtectedRoute allowedRoles={['TESTER']}>
                 <TesterDashboard />

@@ -84,6 +84,24 @@ public class UserService {
                 .toList();
     }
 
+    public List<AdminUserResponse> findEligibleDevelopers(UUID projectId) {
+        return userRepository.findEligibleDevelopersForProject(projectId).stream()
+                .map(AdminUserResponse::from)
+                .toList();
+    }
+
+    public List<AdminUserResponse> findEligibleTesters(UUID projectId) {
+        return userRepository.findEligibleTestersForProject(projectId).stream()
+                .map(AdminUserResponse::from)
+                .toList();
+    }
+
+    public List<AdminUserResponse> findEligibleBusinessAnalysts(UUID projectId) {
+        return userRepository.findEligibleBusinessAnalystsForProject(projectId).stream()
+                .map(AdminUserResponse::from)
+                .toList();
+    }
+
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }

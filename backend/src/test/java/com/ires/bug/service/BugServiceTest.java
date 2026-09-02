@@ -9,7 +9,11 @@ import com.ires.common.exception.BadRequestException;
 import com.ires.project.entity.Project;
 import com.ires.project.entity.ProjectStatus;
 import com.ires.project.service.ProjectService;
+import com.ires.notification.service.NotificationService;
 import com.ires.requirement.entity.RequirementPriority;
+import com.ires.requirement.entity.Requirement;
+import com.ires.requirement.entity.RequirementStatus;
+import com.ires.requirement.entity.RequirementType;
 import com.ires.requirement.service.RequirementService;
 import com.ires.testing.entity.ExecutionStatus;
 import com.ires.testing.entity.TestCase;
@@ -19,6 +23,7 @@ import com.ires.testing.service.TestCaseService;
 import com.ires.user.entity.User;
 import com.ires.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -36,12 +41,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BugServiceTest {
 
+    @BeforeEach
+    void testerPrincipal() {
+        org.mockito.Mockito.lenient().doReturn(java.util.List.of(
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_TESTER")))
+                .when(principal).getAuthorities();
+    }
+
     @Mock private BugRepository bugRepository;
     @Mock private ProjectService projectService;
     @Mock private RequirementService requirementService;
     @Mock private TestCaseService testCaseService;
     @Mock private TestCaseExecutionRepository executionRepository;
     @Mock private UserRepository userRepository;
+    @Mock private NotificationService notificationService;
     @Mock private UserDetails principal;
 
     @InjectMocks
@@ -70,8 +83,6 @@ class BugServiceTest {
         UUID bugId = UUID.randomUUID();
         bug.setId(bugId);
         when(bugRepository.findById(bugId)).thenReturn(Optional.of(bug));
-        when(projectService.currentUser(principal)).thenReturn(project.getClient());
-
         assertThat(bugService.resolve(bugId, principal).status()).isEqualTo(BugStatus.RESOLVED);
         assertThat(bugService.reopen(bugId, principal).status()).isEqualTo(BugStatus.REOPENED);
         assertThat(bug.getResolvedAt()).isNull();
@@ -80,15 +91,21 @@ class BugServiceTest {
     @Test
     void createsBugFromFailedExecution() {
         Project project = project();
-        TestCase testCase = new TestCase(project, null, null, "Checkout", null, null,
+        Requirement requirement = new Requirement(project, "Checkout", "Details", RequirementType.FUNCTIONAL,
+                RequirementPriority.HIGH, RequirementStatus.TEST_FAILED, "client", project.getClient(), project.getClient());
+        requirement.setId(UUID.randomUUID());
+        TestCase testCase = new TestCase(project, requirement, null, "Checkout", null, null,
                 "Completes", RequirementPriority.MEDIUM, com.ires.testing.entity.TestCaseStatus.READY,
-                project.getClient(), null);
+                project.getClient(), project.getClient());
         testCase.setId(UUID.randomUUID());
         TestCaseExecution execution = new TestCaseExecution(testCase, project.getClient(), ExecutionStatus.FAIL, "Failed", null);
         UUID executionId = UUID.randomUUID();
         when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
         when(projectService.currentUser(principal)).thenReturn(project.getClient());
         when(projectService.findProject(project.getId())).thenReturn(project);
+        when(requirementService.findAccessibleRequirement(requirement.getId(), principal)).thenReturn(requirement);
+        when(testCaseService.findTestCase(testCase.getId())).thenReturn(testCase);
+        when(userRepository.findById(project.getClient().getId())).thenReturn(Optional.of(project.getClient()));
         when(bugRepository.save(any(Bug.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = bugService.createFromFailedExecution(executionId, new BugCreateRequest(

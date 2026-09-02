@@ -10,6 +10,7 @@ import com.ires.project.entity.Project;
 import com.ires.project.entity.ProjectStatus;
 import com.ires.project.repository.ProjectMemberRepository;
 import com.ires.project.repository.ProjectRepository;
+import com.ires.requirement.repository.RequirementRepository;
 import com.ires.user.entity.User;
 import com.ires.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
+    private final RequirementRepository requirementRepository;
 
     @Transactional
     public ProjectResponse create(ProjectCreateRequest request, UserDetails principal) {
@@ -50,19 +52,20 @@ public class ProjectService {
                 request.endDate(),
                 client
         );
-        return ProjectResponse.from(projectRepository.save(project));
+        return ProjectResponse.from(projectRepository.save(project), 0);
     }
 
     public Page<ProjectResponse> list(String search, ProjectStatus status, Pageable pageable, UserDetails principal) {
         User user = currentUser(principal);
         Specification<Project> specification = accessibleTo(user, isAdmin(principal), search, status);
-        return projectRepository.findAll(specification, pageable).map(ProjectResponse::from);
+        return projectRepository.findAll(specification, pageable)
+                .map(project -> ProjectResponse.from(project, requirementRepository.countByProjectId(project.getId())));
     }
 
     public ProjectResponse get(UUID id, UserDetails principal) {
         Project project = findProject(id);
         assertCanView(project, principal);
-        return ProjectResponse.from(project);
+        return ProjectResponse.from(project, requirementRepository.countByProjectId(project.getId()));
     }
 
     @Transactional

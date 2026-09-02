@@ -13,7 +13,7 @@ export default function DashboardLayout({ children, items, active, onSelect }) {
   }
 
   return (
-    <div className="relative flex min-h-screen">
+    <div className="relative flex min-h-screen bg-[#F8FAF7]">
       <div className="hidden lg:block">
         <Sidebar items={items} active={active} onSelect={onSelect} />
       </div>
@@ -34,7 +34,7 @@ export default function DashboardLayout({ children, items, active, onSelect }) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="glass-strong fixed inset-y-0 left-0 z-50 w-64 lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl lg:hidden"
             >
               <button
                 onClick={() => setMobileOpen(false)}
@@ -49,9 +49,9 @@ export default function DashboardLayout({ children, items, active, onSelect }) {
         )}
       </AnimatePresence>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 px-5 py-8 lg:px-8">{children}</main>
+        <main className="min-w-0 flex-1 px-5 py-8 lg:px-8">{children}</main>
       </div>
     </div>
   )

@@ -100,12 +100,15 @@ class DeveloperTaskServiceTest {
 
     private Project project() {
         User owner = user("owner@example.com");
-        return new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, owner);
+        Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, owner);
+        project.setId(UUID.randomUUID());
+        return project;
     }
 
     private Requirement requirement() {
         User owner = user("other@example.com");
         Project project = new Project("Other", "Project", ProjectStatus.ACTIVE, null, null, owner);
+        project.setId(UUID.randomUUID());
         Requirement requirement = new Requirement(project, "Other requirement", "Details",
                 RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.DRAFT,
                 "client", owner, null);

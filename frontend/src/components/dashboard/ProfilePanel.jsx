@@ -1,4 +1,4 @@
-import { Mail, Shield, Pencil } from 'lucide-react'
+import { AtSign, CheckCircle2, Mail, Shield } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import GlassCard from '../GlassCard.jsx'
 
@@ -36,16 +36,15 @@ export default function ProfilePanel() {
           <Shield size={16} className="text-purple-300" />
           <span className="text-sm text-slate-200">Signed in as {roleLabel}</span>
         </div>
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <AtSign size={16} className="text-blue-300" />
+          <span className="text-sm text-slate-200">{user?.username || 'No username configured'}</span>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <CheckCircle2 size={16} className={user?.active === false ? 'text-red-300' : 'text-emerald-300'} />
+          <span className="text-sm text-slate-200">Account {user?.active === false ? 'inactive' : 'active'}</span>
+        </div>
       </div>
-
-      <button
-        type="button"
-        onClick={(e) => e.preventDefault()}
-        className="btn-outline mt-6 !py-2.5 text-sm"
-      >
-        <Pencil size={15} />
-        Edit profile
-      </button>
     </GlassCard>
   )
 }

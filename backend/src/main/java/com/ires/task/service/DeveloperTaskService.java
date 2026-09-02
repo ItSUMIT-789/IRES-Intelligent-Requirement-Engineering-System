@@ -47,12 +47,12 @@ public class DeveloperTaskService {
         Project project = projectService.findProject(projectId);
         assertCanCreate(project, principal);
         Requirement requirement = findRequirementForProject(request.requirementId(), projectId, principal);
-        if (hasRole(principal, "ROLE_DEVELOPER") && (requirement == null || requirement.getAssignedTo() == null
-                || !requirement.getAssignedTo().getId().equals(projectService.currentUser(principal).getId()))) {
-            throw new ForbiddenException("Developers can only create tasks for requirements assigned to them.");
-        }
+        User currentUser = projectService.currentUser(principal);
+        if (hasRole(principal, "ROLE_DEVELOPER")) assertDeveloperRequirement(requirement, currentUser);
         UserStory userStory = findStoryForProject(request.userStoryId(), projectId);
-        User assignedTo = findOptionalUser(request.assignedTo());
+        User assignedTo = hasRole(principal, "ROLE_DEVELOPER") ? currentUser : findOptionalUser(request.assignedTo());
+        if (hasRole(principal, "ROLE_DEVELOPER") && request.assignedTo() != null && !request.assignedTo().equals(currentUser.getId()))
+            throw new ForbiddenException("Developers cannot assign their tasks to another user.");
         DeveloperTask task = new DeveloperTask(
                 project,
                 requirement,
@@ -63,7 +63,7 @@ public class DeveloperTaskService {
                 request.priority() == null ? com.ires.requirement.entity.RequirementPriority.MEDIUM : request.priority(),
                 request.status() == null ? TaskStatus.TODO : request.status(),
                 request.dueDate(),
-                projectService.currentUser(principal)
+                currentUser
         );
         return DeveloperTaskResponse.from(taskRepository.save(task));
     }
@@ -101,12 +101,18 @@ public class DeveloperTaskService {
         DeveloperTask task = findTask(id);
         assertCanUpdate(task, principal);
         Requirement requirement = findRequirementForProject(request.requirementId(), task.getProject().getId(), principal);
+        User currentUser = projectService.currentUser(principal);
+        if (hasRole(principal, "ROLE_DEVELOPER")) assertDeveloperRequirement(requirement, currentUser);
         UserStory userStory = findStoryForProject(request.userStoryId(), task.getProject().getId());
         task.setRequirement(requirement);
         task.setUserStory(userStory);
         task.setTitle(request.title().trim());
         task.setDescription(request.description());
-        task.setAssignedTo(findOptionalUser(request.assignedTo()));
+        if (hasRole(principal, "ROLE_DEVELOPER")) {
+            if (request.assignedTo() != null && !request.assignedTo().equals(currentUser.getId()))
+                throw new ForbiddenException("Developers cannot reassign their tasks.");
+            task.setAssignedTo(currentUser);
+        } else task.setAssignedTo(findOptionalUser(request.assignedTo()));
         task.setPriority(request.priority() == null ? task.getPriority() : request.priority());
         task.setStatus(request.status() == null ? task.getStatus() : request.status());
         task.setDueDate(request.dueDate());
@@ -216,6 +222,15 @@ public class DeveloperTaskService {
         if (task.getAssignedTo() == null || !task.getAssignedTo().getId().equals(currentUser.getId())) {
             throw new ForbiddenException("Developers can only access tasks assigned to them.");
         }
+    }
+
+    private void assertDeveloperRequirement(Requirement requirement, User currentUser) {
+        if (requirement == null || requirement.getAssignedTo() == null
+                || !requirement.getAssignedTo().getId().equals(currentUser.getId()))
+            throw new ForbiddenException("Developers can only manage tasks for requirements assigned to them.");
+        if (requirement.getStatus() != com.ires.requirement.entity.RequirementStatus.IN_DEVELOPMENT
+                && requirement.getStatus() != com.ires.requirement.entity.RequirementStatus.TEST_FAILED)
+            throw new BadRequestException("Developer tasks can only be managed during development or rework.");
     }
 
     private Specification<DeveloperTask> byProjectAndFilters(

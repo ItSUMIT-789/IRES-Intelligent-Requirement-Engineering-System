@@ -11,13 +11,13 @@ export default function StatCard({ icon: Icon, label, value, delta, index = 0 })
       <GlassCard className="p-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="mt-2 font-display text-2xl font-bold text-white sm:text-3xl">{value}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="mt-2 font-display text-2xl font-bold text-[#17211B] sm:text-3xl">{value}</p>
             {delta && <p className="mt-1 text-xs text-slate-500">{delta}</p>}
           </div>
           {Icon && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10">
-              <Icon size={18} className="text-blue-300" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50">
+              <Icon size={18} className="text-green-700" />
             </div>
           )}
         </div>

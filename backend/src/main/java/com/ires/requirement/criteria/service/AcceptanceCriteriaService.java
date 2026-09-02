@@ -2,7 +2,7 @@ package com.ires.requirement.criteria.service;
 
 import com.ires.common.exception.BadRequestException;
 import com.ires.common.exception.NotFoundException;
-import com.ires.project.service.ProjectService;
+import com.ires.common.exception.ForbiddenException;
 import com.ires.requirement.criteria.dto.AcceptanceCriteriaCreateRequest;
 import com.ires.requirement.criteria.dto.AcceptanceCriteriaResponse;
 import com.ires.requirement.criteria.dto.AcceptanceCriteriaUpdateRequest;
@@ -30,7 +30,6 @@ public class AcceptanceCriteriaService {
 
     private final AcceptanceCriteriaRepository criteriaRepository;
     private final RequirementService requirementService;
-    private final ProjectService projectService;
     private final UserStoryRepository userStoryRepository;
 
     @Transactional
@@ -40,7 +39,7 @@ public class AcceptanceCriteriaService {
             UserDetails principal
     ) {
         Requirement requirement = requirementService.findAccessibleRequirement(requirementId, principal);
-        projectService.assertCanManage(requirement.getProject(), principal);
+        assertAnalystOrAdmin(principal);
         UserStory userStory = findStoryForRequirement(request.userStoryId(), requirementId);
         AcceptanceCriteria criteria = new AcceptanceCriteria(
                 requirement,
@@ -69,7 +68,8 @@ public class AcceptanceCriteriaService {
             UserDetails principal
     ) {
         AcceptanceCriteria criteria = findCriteria(id);
-        projectService.assertCanManage(criteria.getRequirement().getProject(), principal);
+        requirementService.findAccessibleRequirement(criteria.getRequirement().getId(), principal);
+        assertAnalystOrAdmin(principal);
         UserStory userStory = findStoryForRequirement(request.userStoryId(), criteria.getRequirement().getId());
         criteria.setUserStory(userStory);
         criteria.setTitle(request.title().trim());
@@ -82,7 +82,8 @@ public class AcceptanceCriteriaService {
     @Transactional
     public void delete(UUID id, UserDetails principal) {
         AcceptanceCriteria criteria = findCriteria(id);
-        projectService.assertCanManage(criteria.getRequirement().getProject(), principal);
+        requirementService.findAccessibleRequirement(criteria.getRequirement().getId(), principal);
+        assertAnalystOrAdmin(principal);
         criteriaRepository.delete(criteria);
     }
 
@@ -109,5 +110,12 @@ public class AcceptanceCriteriaService {
 
     private CriteriaStatus defaultStatus(CriteriaStatus status) {
         return status == null ? CriteriaStatus.DRAFT : status;
+    }
+
+    private void assertAnalystOrAdmin(UserDetails principal) {
+        boolean allowed = principal.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority())
+                        || "ROLE_BUSINESS_ANALYST".equals(authority.getAuthority()));
+        if (!allowed) throw new ForbiddenException("Only business analysts or admins can manage acceptance criteria.");
     }
 }

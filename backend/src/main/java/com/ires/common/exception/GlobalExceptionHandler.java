@@ -4,6 +4,7 @@ import com.ires.common.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -56,6 +57,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(exception.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiResponse<Void>> handleAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure("Access denied."));
     }
 
     @ExceptionHandler(NotFoundException.class)

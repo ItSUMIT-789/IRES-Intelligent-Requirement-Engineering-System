@@ -2,6 +2,7 @@ package com.ires.traceability.service;
 
 import com.ires.common.exception.BadRequestException;
 import com.ires.common.exception.ConflictException;
+import com.ires.common.exception.NotFoundException;
 import com.ires.project.entity.Project;
 import com.ires.project.entity.ProjectStatus;
 import com.ires.project.service.ProjectService;
@@ -25,6 +26,7 @@ import com.ires.traceability.entity.TraceabilityLink;
 import com.ires.traceability.repository.TraceabilityLinkRepository;
 import com.ires.user.entity.User;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -38,9 +40,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class TraceabilityServiceTest {
+
+    @BeforeEach
+    void businessAnalystPrincipal() {
+        doReturn(java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_BUSINESS_ANALYST")))
+                .when(principal).getAuthorities();
+    }
 
     @Mock
     private TraceabilityLinkRepository linkRepository;
@@ -85,6 +94,7 @@ class TraceabilityServiceTest {
                 RequirementPriority.MEDIUM, StoryStatus.READY, requirement.getCreatedBy());
         story.setId(UUID.randomUUID());
         when(requirementService.findAccessibleRequirement(requirement.getId(), principal)).thenReturn(requirement);
+        when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(userStoryRepository.findById(story.getId())).thenReturn(Optional.of(story));
         when(linkRepository.existsByRequirementIdAndSourceTypeAndSourceIdAndTargetTypeAndTargetId(
                 requirement.getId(), TraceabilityEntityType.REQUIREMENT, requirement.getId(),
@@ -108,6 +118,7 @@ class TraceabilityServiceTest {
                 RequirementPriority.MEDIUM, StoryStatus.READY, requirement.getCreatedBy());
         story.setId(storyId);
         when(requirementService.findAccessibleRequirement(requirement.getId(), principal)).thenReturn(requirement);
+        when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(userStoryRepository.findById(storyId)).thenReturn(Optional.of(story));
         when(linkRepository.existsByRequirementIdAndSourceTypeAndSourceIdAndTargetTypeAndTargetId(
                 any(), any(), any(), any(), any())).thenReturn(true);
@@ -119,14 +130,15 @@ class TraceabilityServiceTest {
     }
 
     @Test
-    void rejectsFutureModuleLink() {
+    void rejectsMissingTestCaseEndpoint() {
         Requirement requirement = requirement();
         when(requirementService.findAccessibleRequirement(requirement.getId(), principal)).thenReturn(requirement);
+        when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
 
         assertThatThrownBy(() -> traceabilityService.create(requirement.getId(), new TraceabilityLinkRequest(
                 TraceabilityEntityType.REQUIREMENT, requirement.getId(),
                 TraceabilityEntityType.TEST_CASE, UUID.randomUUID()), principal))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -138,6 +150,7 @@ class TraceabilityServiceTest {
         UUID storyId = UUID.randomUUID();
         story.setId(storyId);
         when(requirementService.findAccessibleRequirement(requirement.getId(), principal)).thenReturn(requirement);
+        when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(userStoryRepository.findById(storyId)).thenReturn(Optional.of(story));
 
         assertThatThrownBy(() -> traceabilityService.create(requirement.getId(), new TraceabilityLinkRequest(
@@ -151,7 +164,7 @@ class TraceabilityServiceTest {
         owner.setId(UUID.randomUUID());
         Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, owner);
         Requirement requirement = new Requirement(project, "Guest checkout", "Details",
-                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.APPROVED_FOR_DEVELOPMENT,
+                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.ANALYSIS_COMPLETED,
                 "client", owner, null);
         requirement.setId(UUID.randomUUID());
         return requirement;

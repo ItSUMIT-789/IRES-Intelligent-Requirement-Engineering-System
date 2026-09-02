@@ -11,11 +11,13 @@ import com.ires.project.repository.ProjectRepository;
 import com.ires.user.entity.User;
 import com.ires.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -25,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceTest {
@@ -44,9 +48,16 @@ class ProjectServiceTest {
     @InjectMocks
     private ProjectService projectService;
 
+    @BeforeEach
+    void clientPrincipal() {
+        doReturn(java.util.List.of(new SimpleGrantedAuthority("ROLE_CLIENT")))
+                .when(principal).getAuthorities();
+    }
+
     @Test
     void clientCreatesProjectOwnedByAuthenticatedUser() {
         User client = new User("Ada", "Lovelace", "ada@example.com", "hash", null);
+        client.setId(UUID.randomUUID());
         when(principal.getUsername()).thenReturn("ada@example.com");
         when(userRepository.findByEmail("ada@example.com")).thenReturn(Optional.of(client));
         when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -74,6 +85,8 @@ class ProjectServiceTest {
     void preventsClientFromUpdatingAnotherClientsProject() {
         User authenticatedClient = new User("Ada", "Lovelace", "ada@example.com", "hash", null);
         User projectOwner = new User("Grace", "Hopper", "grace@example.com", "hash", null);
+        authenticatedClient.setId(UUID.randomUUID());
+        projectOwner.setId(UUID.randomUUID());
         Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, projectOwner);
         when(principal.getUsername()).thenReturn("ada@example.com");
         when(userRepository.findByEmail("ada@example.com")).thenReturn(Optional.of(authenticatedClient));

@@ -12,6 +12,8 @@ import java.util.UUID;
 public record RequirementResponse(
         UUID id,
         UUID projectId,
+        String projectName,
+        UserSummary projectClient,
         String title,
         String description,
         RequirementType requirementType,
@@ -28,6 +30,8 @@ public record RequirementResponse(
         return new RequirementResponse(
                 requirement.getId(),
                 requirement.getProject().getId(),
+                requirement.getProject().getName(),
+                UserSummary.from(requirement.getProject().getClient()),
                 requirement.getTitle(),
                 requirement.getDescription(),
                 requirement.getRequirementType(),

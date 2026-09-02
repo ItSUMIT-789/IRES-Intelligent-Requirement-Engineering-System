@@ -2,7 +2,7 @@ export default function GoogleButton({ label = 'Continue with Google' }) {
   return (
     <button
       type="button"
-      className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/[0.04] py-2.5 text-sm font-medium text-slate-200 transition-all duration-200 hover:bg-white/[0.09] hover:border-white/25 hover:-translate-y-0.5"
+      className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors duration-200 hover:border-green-300 hover:bg-green-50"
     >
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
         <path

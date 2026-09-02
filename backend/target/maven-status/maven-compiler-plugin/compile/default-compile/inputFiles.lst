@@ -37,6 +37,12 @@
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/dashboard/dto/DashboardMetric.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/dashboard/dto/DashboardResponse.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/dashboard/service/DashboardService.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/controller/NotificationController.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/dto/NotificationResponse.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/entity/Notification.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/entity/NotificationType.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/repository/NotificationRepository.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/notification/service/NotificationService.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/project/controller/ProjectController.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/project/controller/ProjectMemberController.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/project/dto/ProjectCreateRequest.java
@@ -83,6 +89,7 @@
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/dto/RequirementCreateRequest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/dto/RequirementResponse.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/dto/RequirementUpdateRequest.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/dto/TesterAssignmentRequest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/entity/Requirement.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/entity/RequirementPriority.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/requirement/entity/RequirementStatus.java
@@ -129,6 +136,7 @@
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/traceability/repository/TraceabilityLinkRepository.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/traceability/service/TraceabilityService.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/user/controller/AdminUserController.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/user/controller/DeliveryUserController.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/user/dto/AdminUserResponse.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/user/dto/LoginRequest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/main/java/com/ires/user/dto/RegisterRequest.java

@@ -1,2 +1,21 @@
-import RoleDashboard from '../../components/dashboard/RoleDashboard.jsx'
-export default RoleDashboard
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import DashboardLayout from '../../layouts/DashboardLayout.jsx'
+import GlassCard from '../../components/GlassCard.jsx'
+import StatCard from '../../components/StatCard.jsx'
+import AdminUsersPanel from '../../components/dashboard/AdminUsersPanel.jsx'
+import ProfilePanel from '../../components/dashboard/ProfilePanel.jsx'
+import AdminRequirements from '../../components/admin/AdminRequirements.jsx'
+import AdminRequirementReview from '../../components/admin/AdminRequirementReview.jsx'
+import AdminProjects from '../../components/admin/AdminProjects.jsx'
+import AdminProjectMembers from '../../components/admin/AdminProjectMembers.jsx'
+import NotificationPage from '../../components/dashboard/NotificationPage.jsx'
+import { getRoleNavigation } from '../../config/roleNavigation.js'
+import { dashboardService } from '../../services/dashboardService.js'
+import { Users, FolderKanban, FileText, Network, Activity, Bug, ClipboardCheck } from 'lucide-react'
+
+const paths={overview:'/admin/dashboard',users:'/admin/users',projects:'/admin/projects',requirements:'/admin/requirements',workflow:'/admin/workflow',tasks:'/admin/tasks',testing:'/admin/testing',bugs:'/admin/bugs',reports:'/admin/reports',notifications:'/admin/notifications',profile:'/admin/profile'}
+export default function AdminDashboard(){const navigate=useNavigate();const location=useLocation();const items=getRoleNavigation('ADMIN');const active=location.pathname.startsWith('/admin/requirements/')?'requirements':location.pathname.startsWith('/admin/projects/')?'projects':Object.entries(paths).find(([,p])=>p===location.pathname)?.[0]||'overview';return <DashboardLayout items={items} active={active} onSelect={(key)=>navigate(paths[key])}><Routes><Route path="dashboard" element={<AdminOverview/>}/><Route path="users" element={<AdminUsersPanel/>}/><Route path="projects" element={<AdminProjects/>}/><Route path="projects/:id" element={<AdminProjectMembers/>}/><Route path="requirements" element={<AdminRequirements/>}/><Route path="workflow" element={<AdminRequirements assignmentQueue/>}/><Route path="requirements/:id" element={<AdminRequirementReview/>}/><Route path="profile" element={<><AdminHeader title="Profile" subtitle="Your authenticated administrator account."/><ProfilePanel/></>}/><Route path="tasks" element={<Placeholder title="Developer Tasks"/>}/><Route path="testing" element={<AdminRequirements finalQueue/>}/><Route path="bugs" element={<Placeholder title="Bugs"/>}/><Route path="reports" element={<Placeholder title="Reports"/>}/><Route path="notifications" element={<NotificationPage/>}/><Route path="*" element={<Navigate to="dashboard" replace/>}/></Routes></DashboardLayout>}
+function AdminOverview(){const [summary,setSummary]=useState(null);const [error,setError]=useState('');useEffect(()=>{dashboardService.getSummary().then((r)=>setSummary(r.data)).catch((e)=>setError(e.message))},[]);const icons=[Users,FolderKanban,FileText,Network,Activity,Bug,ClipboardCheck];return <><AdminHeader title="Admin Dashboard" subtitle="System-wide delivery and requirement engineering health."/>{error&&<GlassCard hover={false} className="p-6 text-red-300">{error}</GlassCard>}{!summary&&!error&&<GlassCard hover={false} className="p-6 text-slate-400">Loading dashboard…</GlassCard>}{summary&&<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{summary.metrics.map((m,i)=><StatCard key={m.key} icon={icons[i%icons.length]} label={m.label} value={m.value} delta={m.value===0?m.emptyMessage:undefined} index={i}/>)}</div>}</>}
+export function AdminHeader({title,subtitle,action}){return <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><span className="text-xs font-semibold uppercase tracking-widest text-blue-300">Admin</span><h1 className="text-2xl font-bold text-white sm:text-3xl">{title}</h1>{subtitle&&<p className="mt-1 text-sm text-slate-400">{subtitle}</p>}</div>{action}</div>}
+function Placeholder({title}){return <><AdminHeader title={title}/><GlassCard hover={false} className="border-dashed p-8 text-center"><p className="font-medium text-slate-700">No data available</p><p className="mt-1 text-sm text-slate-500">{title} will appear here when its supporting functionality is available.</p></GlassCard></>}

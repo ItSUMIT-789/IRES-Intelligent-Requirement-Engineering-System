@@ -8,6 +8,7 @@
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/bug/repository/BugRepositoryTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/bug/service/BugServiceTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/config/DefaultAdminInitializerTest.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/notification/service/NotificationServiceTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/project/controller/ProjectControllerTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/project/controller/ProjectMemberControllerTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/project/repository/ProjectMemberRepositoryTest.java
@@ -26,6 +27,7 @@
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/requirement/criteria/service/AcceptanceCriteriaServiceTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/requirement/repository/RequirementRepositoryTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/requirement/service/RequirementServiceTest.java
+/Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/requirement/workflow/RequirementWorkflowServiceTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/story/controller/UserStoryControllerTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/story/repository/UserStoryRepositoryTest.java
 /Users/abhayvijaysonone/Downloads/IRES-Intelligent-Requirement-Engineering-System-main/backend/src/test/java/com/ires/story/service/UserStoryServiceTest.java

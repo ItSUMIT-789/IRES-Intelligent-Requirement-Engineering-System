@@ -19,6 +19,7 @@ function normalizeUser(user) {
     name,
     email: user.email,
     username: user.username || '',
+    active: user.active,
     role,
     roleLabel: getRoleLabel(role),
   }

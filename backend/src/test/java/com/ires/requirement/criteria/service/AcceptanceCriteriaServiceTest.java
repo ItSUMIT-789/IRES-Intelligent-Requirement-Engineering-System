@@ -20,6 +20,7 @@ import com.ires.story.entity.UserStory;
 import com.ires.story.repository.UserStoryRepository;
 import com.ires.user.entity.User;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 @ExtendWith(MockitoExtension.class)
 class AcceptanceCriteriaServiceTest {
@@ -54,6 +56,12 @@ class AcceptanceCriteriaServiceTest {
 
     @InjectMocks
     private AcceptanceCriteriaService criteriaService;
+
+    @BeforeEach
+    void businessAnalystPrincipal() {
+        doReturn(java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_BUSINESS_ANALYST")))
+                .when(principal).getAuthorities();
+    }
 
     @Test
     void createsCriteriaLinkedToAnOptionalStory() {
@@ -107,7 +115,7 @@ class AcceptanceCriteriaServiceTest {
         owner.setId(UUID.randomUUID());
         Project project = new Project("Checkout", "Revamp", ProjectStatus.ACTIVE, null, null, owner);
         Requirement requirement = new Requirement(project, "Guest checkout", "Details",
-                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.APPROVED_FOR_DEVELOPMENT,
+                RequirementType.FUNCTIONAL, RequirementPriority.MEDIUM, RequirementStatus.ANALYSIS_COMPLETED,
                 "client", owner, null);
         requirement.setId(UUID.randomUUID());
         return requirement;

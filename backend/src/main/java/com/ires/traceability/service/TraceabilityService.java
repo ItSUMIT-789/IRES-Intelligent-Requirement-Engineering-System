@@ -3,7 +3,7 @@ package com.ires.traceability.service;
 import com.ires.common.exception.BadRequestException;
 import com.ires.common.exception.ConflictException;
 import com.ires.common.exception.NotFoundException;
-import com.ires.project.service.ProjectService;
+import com.ires.common.exception.ForbiddenException;
 import com.ires.requirement.criteria.repository.AcceptanceCriteriaRepository;
 import com.ires.requirement.entity.Requirement;
 import com.ires.requirement.repository.RequirementRepository;
@@ -34,7 +34,6 @@ public class TraceabilityService {
 
     private final TraceabilityLinkRepository linkRepository;
     private final RequirementService requirementService;
-    private final ProjectService projectService;
     private final RequirementRepository requirementRepository;
     private final UserStoryRepository userStoryRepository;
     private final AcceptanceCriteriaRepository criteriaRepository;
@@ -55,7 +54,7 @@ public class TraceabilityService {
             UserDetails principal
     ) {
         Requirement requirement = requirementService.findAccessibleRequirement(requirementId, principal);
-        projectService.assertCanManage(requirement.getProject(), principal);
+        assertAnalystOrAdmin(principal);
         validateSupportedType(request.sourceType());
         validateSupportedType(request.targetType());
         validateEndpoint(requirementId, request.sourceType(), request.sourceId());
@@ -86,11 +85,18 @@ public class TraceabilityService {
         TraceabilityLink link = linkRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Traceability link not found."));
         Requirement requirement = requirementService.findAccessibleRequirement(link.getRequirementId(), principal);
-        projectService.assertCanManage(requirement.getProject(), principal);
+        assertAnalystOrAdmin(principal);
         linkRepository.delete(link);
     }
 
     private void validateSupportedType(TraceabilityEntityType type) {
+    }
+
+    private void assertAnalystOrAdmin(UserDetails principal) {
+        boolean allowed = principal.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority())
+                        || "ROLE_BUSINESS_ANALYST".equals(authority.getAuthority()));
+        if (!allowed) throw new ForbiddenException("Only business analysts or admins can manage traceability links.");
     }
 
     private void validateEndpoint(UUID requirementId, TraceabilityEntityType type, UUID entityId) {

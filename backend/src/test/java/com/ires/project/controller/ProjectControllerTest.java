@@ -62,7 +62,7 @@ class ProjectControllerTest {
 
     private final ProjectResponse projectResponse = new ProjectResponse(
             UUID.randomUUID(), "Checkout", "Revamp", ProjectStatus.ACTIVE, null, null,
-            new com.ires.project.dto.UserSummary(UUID.randomUUID(), "Ada Lovelace", "ada@example.com"), null, null);
+            new com.ires.project.dto.UserSummary(UUID.randomUUID(), "Ada Lovelace", "ada@example.com"), 0, null, null);
 
     @Test
     void rejectsUnauthenticatedProjectRequest() throws Exception {

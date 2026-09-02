@@ -7,8 +7,6 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Frontend-only: files are kept in local state to show the interaction,
-// nothing is actually uploaded anywhere.
 export default function FileDropzone({ accept = '.pdf,.docx,.csv', files, onChange }) {
   const [dragActive, setDragActive] = useState(false)
   const inputRef = useRef(null)

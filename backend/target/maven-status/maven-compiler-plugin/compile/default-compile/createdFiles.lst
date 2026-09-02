@@ -45,11 +45,13 @@ com/ires/project/dto/ProjectResponse.class
 com/ires/requirement/repository/RequirementRepository.class
 com/ires/project/dto/ProjectMemberRequest.class
 com/ires/IresApplication.class
+com/ires/notification/entity/NotificationType.class
 com/ires/requirement/criteria/entity/CriteriaStatus.class
 com/ires/user/dto/UserResponse.class
 com/ires/story/repository/UserStoryRepository.class
 com/ires/project/dto/ProjectUpdateRequest.class
 com/ires/requirement/attachment/service/RequirementAttachmentService.class
+com/ires/notification/dto/NotificationResponse.class
 com/ires/user/entity/RoleName.class
 com/ires/task/entity/TaskStatus.class
 com/ires/requirement/attachment/dto/AttachmentResponse.class
@@ -60,6 +62,7 @@ com/ires/user/entity/Role.class
 com/ires/project/controller/ProjectMemberController.class
 com/ires/requirement/comment/controller/RequirementCommentController.class
 com/ires/config/OpenApiConfig.class
+com/ires/notification/service/NotificationService.class
 com/ires/testing/service/TestCaseService.class
 com/ires/requirement/criteria/controller/AcceptanceCriteriaController.class
 com/ires/user/repository/RoleRepository.class
@@ -107,6 +110,7 @@ com/ires/task/dto/DeveloperTaskResponse.class
 com/ires/auth/AuthController.class
 com/ires/task/controller/DeveloperTaskController.class
 com/ires/config/CorsConfig.class
+com/ires/notification/controller/NotificationController.class
 com/ires/requirement/criteria/entity/AcceptanceCriteria.class
 com/ires/user/service/UserService.class
 com/ires/requirement/clarification/dto/ClarificationRequest.class
@@ -124,6 +128,7 @@ com/ires/bug/entity/BugSeverity.class
 com/ires/project/controller/ProjectController.class
 com/ires/testing/dto/TestCaseExecutionRequest.class
 com/ires/dashboard/dto/DashboardMetric.class
+com/ires/notification/repository/NotificationRepository.class
 com/ires/requirement/attachment/repository/RequirementAttachmentRepository.class
 com/ires/dashboard/service/DashboardService.class
 com/ires/requirement/entity/RequirementStatus.class
@@ -134,7 +139,9 @@ com/ires/project/service/ProjectService.class
 com/ires/story/dto/UserStoryUpdateRequest.class
 com/ires/project/service/ProjectMemberService.class
 com/ires/testing/entity/TestCase.class
+com/ires/requirement/dto/TesterAssignmentRequest.class
 com/ires/requirement/dto/RequirementCreateRequest.class
+com/ires/notification/entity/Notification.class
 com/ires/requirement/entity/Requirement.class
 com/ires/common/exception/ConflictException.class
 com/ires/ai/entity/AnalysisStatus.class
@@ -144,4 +151,5 @@ com/ires/ai/controller/RequirementAIAnalysisController.class
 com/ires/task/service/DeveloperTaskService.class
 com/ires/testing/entity/TestCaseExecution.class
 com/ires/project/entity/Project.class
+com/ires/user/controller/DeliveryUserController.class
 com/ires/user/dto/AdminUserResponse$1.class

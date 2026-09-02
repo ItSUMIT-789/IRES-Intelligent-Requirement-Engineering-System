@@ -69,6 +69,34 @@ public class RequirementController {
         return ApiResponse.success("Requirement loaded.", requirementService.get(id, principal));
     }
 
+    @GetMapping("/api/v1/requirements")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<Page<RequirementResponse>> listAccessible(
+            @RequestParam(required = false) UUID projectId,
+            @RequestParam(required = false) RequirementStatus status,
+            @RequestParam(required = false) RequirementPriority priority,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        return ApiResponse.success("Requirements loaded.", requirementService.listAccessible(
+                projectId, status, priority, search, pageable, principal));
+    }
+
+    @GetMapping("/api/v1/requirements/analyst-queue")
+    @PreAuthorize("hasRole('BUSINESS_ANALYST')")
+    public ApiResponse<Page<RequirementResponse>> analystQueue(
+            @RequestParam(required = false) UUID projectId,
+            @RequestParam(required = false) RequirementStatus status,
+            @RequestParam(required = false) RequirementPriority priority,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.ASC) Pageable pageable,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        return ApiResponse.success("Analyst queue loaded.", requirementService.listAnalystQueue(
+                projectId, status, priority, search, pageable, principal));
+    }
+
     @PutMapping("/api/v1/requirements/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CLIENT', 'BUSINESS_ANALYST')")
     public ApiResponse<RequirementResponse> update(

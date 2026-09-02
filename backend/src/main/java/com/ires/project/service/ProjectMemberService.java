@@ -2,6 +2,8 @@ package com.ires.project.service;
 
 import com.ires.common.exception.ConflictException;
 import com.ires.common.exception.NotFoundException;
+import com.ires.common.exception.BadRequestException;
+import com.ires.common.exception.ForbiddenException;
 import com.ires.project.dto.ProjectMemberRequest;
 import com.ires.project.dto.ProjectMemberResponse;
 import com.ires.project.entity.Project;
@@ -30,10 +32,18 @@ public class ProjectMemberService {
     public ProjectMemberResponse add(UUID projectId, ProjectMemberRequest request, UserDetails principal) {
         Project project = projectService.findProject(projectId);
         projectService.assertCanManage(project, principal);
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new NotFoundException("User not found."));
         if (projectMemberRepository.existsByProjectIdAndUserId(projectId, request.userId())) {
             throw new ConflictException("This user is already a member of the project.");
+        }
+        User user = userRepository.findById(request.userId())
+                .orElseThrow(() -> new NotFoundException("User not found."));
+        if (!projectService.isAdmin(principal)
+                && (request.projectRole() == com.ires.project.entity.ProjectMemberRole.ADMIN
+                || request.projectRole() == com.ires.project.entity.ProjectMemberRole.CLIENT)) {
+            throw new ForbiddenException("Clients cannot add Admin or Client project members.");
+        }
+        if (!user.isActive() || user.getRoles().stream().noneMatch(role -> role.getName().equals(request.projectRole().name()))) {
+            throw new BadRequestException("The project role must match the active user's canonical role.");
         }
         ProjectMember member = new ProjectMember(project, user, request.projectRole());
         return ProjectMemberResponse.from(projectMemberRepository.save(member));

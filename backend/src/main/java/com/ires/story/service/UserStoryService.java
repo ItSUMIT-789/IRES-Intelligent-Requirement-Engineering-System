@@ -92,7 +92,7 @@ public class UserStoryService {
             generated = new GeneratedUserStory(
                     "Implement " + requirement.getTitle(),
                     analysis.summary(),
-                    "As a user, I want " + requirement.getTitle().toLowerCase()
+                    "As a user, I want " + requirement.getTitle()
                             + " so that the requirement delivers its intended value.",
                     requirement.getPriority()
             );

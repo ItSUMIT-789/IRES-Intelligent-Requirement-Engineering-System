@@ -22,6 +22,8 @@ import com.ires.testing.repository.TestCaseExecutionRepository;
 import com.ires.testing.service.TestCaseService;
 import com.ires.user.entity.User;
 import com.ires.user.repository.UserRepository;
+import com.ires.notification.service.NotificationService;
+import com.ires.notification.entity.NotificationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +49,7 @@ public class BugService {
     private final TestCaseService testCaseService;
     private final TestCaseExecutionRepository executionRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public BugResponse create(UUID projectId, BugCreateRequest request, UserDetails principal) {
@@ -63,7 +66,12 @@ public class BugService {
                 defaultSeverity(request.severity()), defaultPriority(request.priority()), defaultStatus(request.status()),
                 projectService.currentUser(principal), findOptionalUser(request.assignedTo())
         );
-        return BugResponse.from(bugRepository.save(bug));
+        Bug saved = bugRepository.save(bug);
+        if (saved.getAssignedTo() != null && saved.getRequirement() != null)
+            notificationService.notifyUser(saved.getAssignedTo(), NotificationType.BUG_REPORTED,
+                    "Bug Reported", saved.getTitle() + " was reported for " + saved.getRequirement().getTitle() + ".",
+                    saved.getRequirement());
+        return BugResponse.from(saved);
     }
 
     @Transactional
@@ -74,10 +82,16 @@ public class BugService {
             throw new BadRequestException("A bug can only be created from a failed test execution.");
         }
         TestCase testCase = execution.getTestCase();
-        projectService.assertCanView(testCase.getProject(), principal);
+        testCaseService.get(testCase.getId(), principal);
+        User reporter = projectService.currentUser(principal);
+        if (!projectService.isAdmin(principal) && !execution.getExecutedBy().getId().equals(reporter.getId()))
+            throw new ForbiddenException("Only the Tester who recorded the failed execution can report its bug.");
+        if (testCase.getRequirement() == null || testCase.getRequirement().getStatus() != com.ires.requirement.entity.RequirementStatus.TEST_FAILED)
+            throw new BadRequestException("Bugs from executions require a failed requirement.");
         BugCreateRequest linkedRequest = new BugCreateRequest(
-                request.requirementId(), testCase.getId(), request.title(), request.description(),
-                request.severity(), request.priority(), request.status(), request.assignedTo());
+                testCase.getRequirement().getId(), testCase.getId(), request.title(), request.description(),
+                request.severity(), request.priority(), request.status(),
+                testCase.getRequirement().getAssignedTo() == null ? null : testCase.getRequirement().getAssignedTo().getId());
         return create(testCase.getProject().getId(), linkedRequest, principal);
     }
 
@@ -86,13 +100,16 @@ public class BugService {
                                   UserDetails principal) {
         Project project = projectService.findProject(projectId);
         projectService.assertCanView(project, principal);
-        Specification<Bug> specification = byProjectAndFilters(projectId, status, severity, priority, assigneeId);
+        UUID developerId = hasRole(principal, "ROLE_DEVELOPER") ? projectService.currentUser(principal).getId() : null;
+        UUID testerId = hasRole(principal, "ROLE_TESTER") ? projectService.currentUser(principal).getId() : null;
+        Specification<Bug> specification = byProjectAndFilters(projectId, status, severity, priority, assigneeId, developerId, testerId);
         return bugRepository.findAll(specification, pageable).map(BugResponse::from);
     }
 
     public BugResponse get(UUID id, UserDetails principal) {
         Bug bug = findBug(id);
         projectService.assertCanView(bug.getProject(), principal);
+        assertDeveloperRelevant(bug, principal);
         return BugResponse.from(bug);
     }
 
@@ -163,6 +180,7 @@ public class BugService {
             throw new BadRequestException("Test case does not belong to the project.");
         }
         projectService.assertCanView(testCase.getProject(), principal);
+        if (hasRole(principal, "ROLE_TESTER")) testCaseService.get(id, principal);
         return testCase;
     }
 
@@ -202,6 +220,15 @@ public class BugService {
 
     private boolean isAdmin(UserDetails principal) { return hasRole(principal, "ROLE_ADMIN"); }
 
+    private void assertDeveloperRelevant(Bug bug, UserDetails principal) {
+        if (!hasRole(principal, "ROLE_DEVELOPER")) return;
+        UUID userId = projectService.currentUser(principal).getId();
+        boolean relevant = bug.getAssignedTo() != null && bug.getAssignedTo().getId().equals(userId)
+                || bug.getRequirement() != null && bug.getRequirement().getAssignedTo() != null
+                && bug.getRequirement().getAssignedTo().getId().equals(userId);
+        if (!relevant) throw new ForbiddenException("Developers can only access bugs relevant to their assigned work.");
+    }
+
     private boolean hasRole(UserDetails principal, String role) {
         return principal.getAuthorities().stream().map(GrantedAuthority::getAuthority).anyMatch(role::equals);
     }
@@ -220,7 +247,7 @@ public class BugService {
     }
 
     private Specification<Bug> byProjectAndFilters(UUID projectId, BugStatus status, BugSeverity severity,
-                                                     RequirementPriority priority, UUID assigneeId) {
+                                                     RequirementPriority priority, UUID assigneeId, UUID developerId, UUID testerId) {
         return (root, query, criteriaBuilder) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.equal(root.get("project").get("id"), projectId));
@@ -228,6 +255,10 @@ public class BugService {
             if (severity != null) predicates.add(criteriaBuilder.equal(root.get("severity"), severity));
             if (priority != null) predicates.add(criteriaBuilder.equal(root.get("priority"), priority));
             if (assigneeId != null) predicates.add(criteriaBuilder.equal(root.get("assignedTo").get("id"), assigneeId));
+            if (developerId != null) predicates.add(criteriaBuilder.or(
+                    criteriaBuilder.equal(root.get("assignedTo").get("id"), developerId),
+                    criteriaBuilder.equal(root.get("requirement").get("assignedTo").get("id"), developerId)));
+            if (testerId != null) predicates.add(criteriaBuilder.equal(root.get("reportedBy").get("id"), testerId));
             return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
     }
