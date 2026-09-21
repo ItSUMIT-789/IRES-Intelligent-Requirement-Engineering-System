@@ -3,8 +3,8 @@ docker compose up -d --wait postgres
 docker compose up -d --build
 docker compose ps
 
-mvn spring-boot:run
+mvn -f backend/pom.xml spring-boot:run
 
 npm run dev
 
-http://localhost:5173
+http://localhost:5173/
