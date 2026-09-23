@@ -204,6 +204,75 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
         assertThat(conflictRequest.getValue().candidateRequirements()).isEmpty();
     }
 
+    @Test
+    void classifyFallsBackToTitleWhenDescriptionIsBlankOrNull() {
+        Requirement titleOnlyRequirement = requirement("Title only requirement", "   ");
+        RequirementAIAnalysis titleAnalysis = new RequirementAIAnalysis(titleOnlyRequirement);
+
+        when(requirementRepository.findById(titleOnlyRequirement.getId())).thenReturn(Optional.of(titleOnlyRequirement));
+        when(analysisRepository.findByRequirementId(titleOnlyRequirement.getId())).thenReturn(Optional.of(titleAnalysis));
+        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(analysisProvider.classify(any())).thenReturn(
+                new ClassificationResponse("NON_FUNCTIONAL", new BigDecimal("0.92"), "Non-functional rule."));
+
+        ClassificationResponse response = analysisService.classify(titleOnlyRequirement.getId());
+
+        assertThat(response.classification()).isEqualTo("NON_FUNCTIONAL");
+        assertThat(titleAnalysis.getClassificationResult().path("classification").asText()).isEqualTo("NON_FUNCTIONAL");
+        assertThat(titleAnalysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+        verify(analysisProvider).classify(new ClassificationRequest(titleOnlyRequirement.getId(), "Title only requirement"));
+    }
+
+    @Test
+    void classifyWithJevProviderIntegratesAndPersistsClassificationResult() throws Exception {
+        com.ires.ai.provider.jev.JevApiClient jevApiClient = org.mockito.Mockito.mock(com.ires.ai.provider.jev.JevApiClient.class);
+        com.ires.ai.provider.jev.JevAIAnalysisProvider jevProvider =
+                new com.ires.ai.provider.jev.JevAIAnalysisProvider(jevApiClient, "typesafe-ai/jev");
+        RequirementAIAnalysisService jevIntegratedService = new RequirementAIAnalysisService(
+                analysisRepository,
+                requirementService,
+                requirementRepository,
+                jevProvider,
+                objectMapper
+        );
+
+        when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
+        when(analysisRepository.findByRequirementId(requirement.getId())).thenReturn(Optional.of(analysis));
+        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.fasterxml.jackson.databind.JsonNode jevData = objectMapper.readTree("""
+                {
+                  "answers": {
+                    "classification": {
+                      "choice": "BUSINESS",
+                      "confidence": 0.95
+                    }
+                  }
+                }
+                """);
+
+        when(jevApiClient.decide(any(com.ires.ai.provider.jev.dto.JevDecisionRequest.class)))
+                .thenReturn(new com.ires.ai.provider.jev.dto.JevDecisionResponse(
+                        0,
+                        "Decision completed",
+                        jevData
+                ));
+
+        ClassificationResponse response = jevIntegratedService.classify(requirement.getId());
+
+        assertThat(response.classification()).isEqualTo("BUSINESS");
+        assertThat(response.confidence()).isEqualTo(new BigDecimal("0.95"));
+        assertThat(analysis.getClassificationResult().path("classification").asText()).isEqualTo("BUSINESS");
+        assertThat(analysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+
+        verify(jevApiClient).decide(org.mockito.ArgumentMatchers.argThat(req ->
+                "typesafe-ai/jev".equals(req.model())
+                        && req.questions().containsKey("classification")
+        ));
+    }
+
     private Requirement requirement(String title, String description) {
         User owner = new User("Test", "User", "owner.com", "hash", null);
         owner.setId(UUID.randomUUID());
@@ -214,3 +283,4 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
         return value;
     }
 }
+
