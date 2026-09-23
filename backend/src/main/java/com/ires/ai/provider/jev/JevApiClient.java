@@ -47,6 +47,13 @@ public class JevApiClient {
                 )
                 .build();
     }
+    public JevApiClient(
+            RestClient restClient,
+            AIAnalysisProperties properties
+    ) {
+        this.restClient = restClient;
+        this.properties = properties;
+    }
 
     public JevDecisionResponse decide(JevDecisionRequest request) {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
