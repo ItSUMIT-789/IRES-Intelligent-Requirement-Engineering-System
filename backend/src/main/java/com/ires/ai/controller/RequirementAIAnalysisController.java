@@ -9,6 +9,7 @@ import com.ires.ai.dto.analysis.ConflictDetectionResponse;
 import com.ires.ai.dto.analysis.DuplicateDetectionResponse;
 import com.ires.ai.dto.analysis.QualityAnalysisResponse;
 import com.ires.ai.service.RequirementAIAnalysisService;
+import com.ires.common.exception.BadRequestException;
 import com.ires.common.response.ApiResponse;
 import com.ires.requirement.service.RequirementService;
 import lombok.RequiredArgsConstructor;
@@ -100,8 +101,9 @@ public class RequirementAIAnalysisController {
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        assertCandidatesAccessible(request.candidateRequirementIds(), principal);
-        return analysisService.detectDuplicates(requirementId, request.candidateRequirementIds());
+        List<UUID> candidateRequirementIds = candidateRequirementIds(request);
+        assertCandidatesAccessible(candidateRequirementIds, principal);
+        return analysisService.detectDuplicates(requirementId, candidateRequirementIds);
     }
 
     @PostMapping("/api/v1/requirements/{requirementId}/ai/conflicts")
@@ -112,8 +114,16 @@ public class RequirementAIAnalysisController {
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        assertCandidatesAccessible(request.candidateRequirementIds(), principal);
-        return analysisService.detectConflicts(requirementId, request.candidateRequirementIds());
+        List<UUID> candidateRequirementIds = candidateRequirementIds(request);
+        assertCandidatesAccessible(candidateRequirementIds, principal);
+        return analysisService.detectConflicts(requirementId, candidateRequirementIds);
+    }
+
+    private List<UUID> candidateRequirementIds(CandidateRequirementsRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Candidate requirement IDs request is required.");
+        }
+        return request.candidateRequirementIds();
     }
 
     private void assertAccessible(UUID requirementId, UserDetails principal) {
