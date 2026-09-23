@@ -1,5 +1,6 @@
 package com.ires.ai.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.ires.requirement.entity.Requirement;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -56,6 +59,30 @@ public class RequirementAIAnalysis {
 
     @Column(columnDefinition = "TEXT")
     private String suggestions;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "classification_result", columnDefinition = "jsonb")
+    private JsonNode classificationResult;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ambiguity_result", columnDefinition = "jsonb")
+    private JsonNode ambiguityResult;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "completeness_result", columnDefinition = "jsonb")
+    private JsonNode completenessResult;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quality_result", columnDefinition = "jsonb")
+    private JsonNode qualityResult;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "duplicate_result", columnDefinition = "jsonb")
+    private JsonNode duplicateResult;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "conflict_result", columnDefinition = "jsonb")
+    private JsonNode conflictResult;
 
     @Column(name = "analyzed_at")
     private Instant analyzedAt;
