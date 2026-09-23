@@ -26,7 +26,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
 public class MockAIAnalysisProvider implements AIAnalysisProvider {
 
     private final boolean available;
