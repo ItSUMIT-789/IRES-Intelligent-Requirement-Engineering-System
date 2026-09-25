@@ -2499,6 +2499,78 @@ class NvidiaAIAnalysisProviderTest {
         }
 
         @Test
+        void detectDuplicatesRecognizesSemanticallyEquivalentDockerRequirements() {
+                UUID targetId = UUID.fromString(
+                        "a1ca132f-5fe7-4b91-8f53-dd1ad87e166e"
+                );
+
+                UUID candidateId = UUID.fromString(
+                        "1027c5c8-16c7-47de-a64e-7a0123d1bc6d"
+                );
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                                {
+                                "requirementId": "%s",
+                                "similarity": 1.0,
+                                "relationship": "SAME_BEHAVIOR",
+                                "reason": "Both requirements describe creating a Docker image for the frontend application."
+                                }
+                        ],
+                        "confidence": 0.96
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                DuplicateDetectionResponse result = provider.detectDuplicates(
+                        new DuplicateDetectionRequest(
+                                targetId,
+                                "The system shall allow users to build a Docker image for the frontend application.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "The system shall allow users to create a Docker image for the frontend application."
+                                        )
+                                )
+                        )
+                );
+
+                assertEquals(1, result.duplicates().size());
+
+                DuplicateCandidate duplicate = result.duplicates().get(0);
+
+                assertEquals(candidateId, duplicate.requirementId());
+
+                assertEquals(
+                        0,
+                        new BigDecimal("1.0")
+                                .compareTo(duplicate.similarity())
+                );
+
+                assertEquals(
+                        "SAME_BEHAVIOR",
+                        duplicate.relationship()
+                );
+
+                assertEquals(
+                        "Both requirements describe creating a Docker image for the frontend application.",
+                        duplicate.reason()
+                );
+
+                assertEquals(
+                        0,
+                        new BigDecimal("0.96")
+                                .compareTo(result.confidence())
+                );
+
+                verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
+
+        @Test
         void detectDuplicatesRejectsInvalidJson() {
                 NvidiaChatResponse response = chatResponse(
                         "not valid json at all"
