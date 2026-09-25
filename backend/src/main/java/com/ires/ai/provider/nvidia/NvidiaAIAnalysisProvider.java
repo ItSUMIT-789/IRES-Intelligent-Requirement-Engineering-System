@@ -749,6 +749,29 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
                 - SAME_BEHAVIOR
                 - OVERLAPPING_REQUIREMENT
 
+                    RELATIONSHIP DEFINITIONS:
+
+                    SAME_BEHAVIOR:
+                    The candidate describes the same operation and intended outcome
+                    as the target. This is a TRUE DUPLICATE.
+
+                    SIMILAR_FUNCTIONALITY:
+                    The candidate is related to the same feature, technology, or domain
+                    but performs a different operation or produces a different outcome.
+                    This is NOT a duplicate.
+
+                    OVERLAPPING_REQUIREMENT:
+                    The candidate shares some functionality with the target but contains
+                    additional, missing, or different behavior. This is NOT automatically
+                    a duplicate.
+
+                    IMPORTANT:
+                    Only return a candidate in the "duplicates" array when its relationship
+                    is SAME_BEHAVIOR.
+
+                    Do NOT return SIMILAR_FUNCTIONALITY or OVERLAPPING_REQUIREMENT in
+                    the duplicates array.
+
                 If no candidate is a duplicate:
                 - duplicates must be an empty array.
 
