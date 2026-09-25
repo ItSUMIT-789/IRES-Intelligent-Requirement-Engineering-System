@@ -1,5 +1,8 @@
 package com.ires.ai.provider.nvidia;
 
+import com.ires.ai.dto.analysis.AmbiguityFinding;
+import com.ires.ai.dto.analysis.AmbiguityRequest;
+import com.ires.ai.dto.analysis.AmbiguityResponse;
 import com.ires.ai.dto.analysis.ClassificationRequest;
 import com.ires.ai.dto.analysis.ClassificationResponse;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
@@ -14,6 +17,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class NvidiaAIAnalysisProviderTest {
 
@@ -85,24 +89,27 @@ class NvidiaAIAnalysisProviderTest {
     }
 
     @Test
-    void classifyFallsBackToDefaultModelWhenBlank() {
+    void classifyRejectsMissingModelConfiguration() {
         NvidiaAIAnalysisProvider providerNoModel =
                 new NvidiaAIAnalysisProvider(client, "");
 
-        NvidiaChatResponse response = chatResponse(
-                "{\"classification\": \"FUNCTIONAL\", \"confidence\": 0.90, \"reason\": \"Test.\"}"
+        ClassificationRequest request = new ClassificationRequest(
+                UUID.randomUUID(),
+                "Some requirement."
         );
 
-        when(client.chatCompletion(any())).thenReturn(response);
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> providerNoModel.classify(request)
+        );
 
-        providerNoModel.classify(new ClassificationRequest(
-                UUID.randomUUID(), "Some requirement."
-        ));
+        assertEquals(
+                "NVIDIA analysis model is not configured.",
+                exception.getMessage()
+        );
 
-        verify(client).chatCompletion(argThat(request ->
-                "meta/llama-3.1-70b-instruct".equals(request.model())
-        ));
-    }
+        verifyNoInteractions(client);
+}
 
     @Test
     void classifyRejectsNullResponse() {
@@ -339,7 +346,350 @@ class NvidiaAIAnalysisProviderTest {
 
         assertEquals("FUNCTIONAL", result.classification());
     }
+/* ------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+    @Test
+    void detectAmbiguityReturnsFindingsForAmbiguousRequirement() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": true,
+                  "findings": [
+                    {
+                      "text": "respond quickly",
+                      "reason": "The word 'quickly' does not define a measurable response time.",
+                      "suggestion": "Specify the maximum response time, for example within 2 seconds."
+                    }
+                  ],
+                  "confidence": 0.89
+                }
+                """
+        );
 
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        AmbiguityRequest request = new AmbiguityRequest(
+                UUID.randomUUID(),
+                "The system shall respond quickly to user requests."
+        );
+
+        AmbiguityResponse result = provider.detectAmbiguity(request);
+
+        assertTrue(result.hasAmbiguity());
+        assertEquals(1, result.findings().size());
+
+        AmbiguityFinding finding = result.findings().get(0);
+
+        assertEquals("respond quickly", finding.text());
+        assertEquals(
+                "The word 'quickly' does not define a measurable response time.",
+                finding.reason()
+        );
+        assertEquals(
+                "Specify the maximum response time, for example within 2 seconds.",
+                finding.suggestion()
+        );
+        assertEquals(new BigDecimal("0.89"), result.confidence());
+
+        verify(client).chatCompletion(any(NvidiaChatRequest.class));
+    }
+
+    @Test
+    void detectAmbiguityReturnsNoFindingsForClearRequirement() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": false,
+                  "findings": [],
+                  "confidence": 0.95
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        AmbiguityRequest request = new AmbiguityRequest(
+                UUID.randomUUID(),
+                "The system shall return a response within 2 seconds."
+        );
+
+        AmbiguityResponse result = provider.detectAmbiguity(request);
+
+        assertFalse(result.hasAmbiguity());
+        assertTrue(result.findings().isEmpty());
+        assertEquals(new BigDecimal("0.95"), result.confidence());
+    }
+
+    @Test
+    void detectAmbiguityMapsMultipleFindings() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": true,
+                  "findings": [
+                    {
+                      "text": "quickly",
+                      "reason": "Response time is not measurable.",
+                      "suggestion": "Specify a maximum response time."
+                    },
+                    {
+                      "text": "user-friendly",
+                      "reason": "The term does not define measurable usability criteria.",
+                      "suggestion": "Define concrete usability requirements."
+                    }
+                  ],
+                  "confidence": 0.91
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        AmbiguityResponse result = provider.detectAmbiguity(
+                new AmbiguityRequest(
+                        UUID.randomUUID(),
+                        "The system shall respond quickly and provide a user-friendly interface."
+                )
+        );
+
+        assertTrue(result.hasAmbiguity());
+        assertEquals(2, result.findings().size());
+
+        assertEquals("quickly", result.findings().get(0).text());
+        assertEquals("user-friendly", result.findings().get(1).text());
+
+        assertEquals(new BigDecimal("0.91"), result.confidence());
+    }
+
+    @Test
+    void detectAmbiguityRejectsMissingHasAmbiguity() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "findings": [],
+                  "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("hasAmbiguity"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsMissingConfidence() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": false,
+                  "findings": []
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("confidence"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsIncompleteFinding() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": true,
+                  "findings": [
+                    {
+                      "text": "quickly",
+                      "reason": "Response time is not measurable."
+                    }
+                  ],
+                  "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "The system shall respond quickly."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("suggestion"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsConfidenceOutOfRange() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": true,
+                  "findings": [
+                    {
+                      "text": "quickly",
+                      "reason": "Response time is not measurable.",
+                      "suggestion": "Specify a maximum response time."
+                    }
+                  ],
+                  "confidence": 1.5
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "The system shall respond quickly."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("out of range"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsFalseWithFindings() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": false,
+                  "findings": [
+                    {
+                      "text": "quickly",
+                      "reason": "Response time is not measurable.",
+                      "suggestion": "Specify a maximum response time."
+                    }
+                  ],
+                  "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "The system shall respond quickly."
+                        )
+                )
+        );
+       assertTrue(exception.getMessage().contains("hasAmbiguity is false"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsTrueWithoutFindings() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                  "hasAmbiguity": true,
+                  "findings": [],
+                  "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "The system shall respond quickly."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("hasAmbiguity is true"));
+    }
+
+    @Test
+    void detectAmbiguityRejectsInvalidJson() {
+        NvidiaChatResponse response =
+                chatResponse("not valid json at all");
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.detectAmbiguity(
+                        new AmbiguityRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("not valid JSON"));
+    }
+
+    @Test
+    void detectAmbiguityStripsMarkdownCodeFences() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                ```json
+                {
+                  "hasAmbiguity": true,
+                  "findings": [
+                    {
+                      "text": "quickly",
+                      "reason": "Response time is not measurable.",
+                      "suggestion": "Specify a maximum response time."
+                    }
+                  ],
+                  "confidence": 0.88
+                }
+                ```
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        AmbiguityResponse result = provider.detectAmbiguity(
+                new AmbiguityRequest(
+                        UUID.randomUUID(),
+                        "The system shall respond quickly."
+                )
+        );
+
+        assertTrue(result.hasAmbiguity());
+        assertEquals(1, result.findings().size());
+        assertEquals("quickly", result.findings().get(0).text());
+        assertEquals(new BigDecimal("0.88"), result.confidence());
+    }
     private NvidiaChatResponse chatResponse(String content) {
         return new NvidiaChatResponse(
                 List.of(new NvidiaChatResponse.Choice(
