@@ -2,6 +2,8 @@ package com.ires.ai.config;
 
 import com.ires.ai.provider.jev.JevAIAnalysisProvider;
 import com.ires.ai.provider.jev.JevApiClient;
+import com.ires.ai.provider.nvidia.NvidiaAIAnalysisProvider;
+import com.ires.ai.provider.nvidia.NvidiaApiClient;
 import com.ires.ai.service.AIAnalysisProvider;
 import com.ires.ai.service.MockAIAnalysisProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +45,34 @@ public class AIAnalysisProviderConfiguration {
     }
 
     @Bean
+    public NvidiaApiClient nvidiaApiClient(
+            RestClient.Builder restClientBuilder,
+            AIAnalysisProperties properties
+    ) {
+        return new NvidiaApiClient(
+                restClientBuilder,
+                properties
+        );
+    }
+
+    @Bean
+    public NvidiaAIAnalysisProvider nvidiaAIAnalysisProvider(
+            NvidiaApiClient client,
+            AIAnalysisProperties properties
+    ) {
+        return new NvidiaAIAnalysisProvider(
+                client,
+                properties.getModel()
+        );
+    }
+
+    @Bean
     @Primary
     public AIAnalysisProvider aiAnalysisProvider(
             AIAnalysisProperties properties,
             MockAIAnalysisProvider mockAIAnalysisProvider,
-            JevAIAnalysisProvider jevAIAnalysisProvider
+            JevAIAnalysisProvider jevAIAnalysisProvider,
+            NvidiaAIAnalysisProvider nvidiaAIAnalysisProvider
     ) {
         String provider = properties.getProvider();
 
@@ -57,6 +82,10 @@ public class AIAnalysisProviderConfiguration {
 
         if ("jev".equalsIgnoreCase(provider)) {
             return jevAIAnalysisProvider;
+        }
+
+        if ("nvidia".equalsIgnoreCase(provider)) {
+            return nvidiaAIAnalysisProvider;
         }
 
         throw new IllegalArgumentException(
