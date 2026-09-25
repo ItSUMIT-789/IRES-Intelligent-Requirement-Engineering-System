@@ -7,6 +7,10 @@ import com.ires.ai.dto.analysis.ClassificationRequest;
 import com.ires.ai.dto.analysis.ClassificationResponse;
 import com.ires.ai.dto.analysis.CompletenessRequest;
 import com.ires.ai.dto.analysis.CompletenessResponse;
+import com.ires.ai.dto.analysis.DuplicateCandidate;
+import com.ires.ai.dto.analysis.DuplicateDetectionRequest;
+import com.ires.ai.dto.analysis.DuplicateDetectionResponse;
+import com.ires.ai.dto.analysis.RequirementCandidate;
 import com.ires.ai.dto.analysis.MissingInformation;
 import com.ires.ai.dto.analysis.QualityAnalysisRequest;
 import com.ires.ai.dto.analysis.QualityAnalysisResponse;
@@ -1797,6 +1801,771 @@ class NvidiaAIAnalysisProviderTest {
                 );
         }
 
+
+        @Test
+        void detectDuplicatesReturnsValidDuplicate() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Both requirements describe the same login behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                DuplicateDetectionResponse result = provider.detectDuplicates(
+                        new DuplicateDetectionRequest(
+                                targetId,
+                                "The system shall allow users to log in.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "The system shall allow registered users to authenticate."
+                                        )
+                                )
+                        )
+                );
+
+                assertEquals(1, result.duplicates().size());
+
+                DuplicateCandidate duplicate = result.duplicates().get(0);
+
+                assertEquals(candidateId, duplicate.requirementId());
+                assertEquals(new BigDecimal("0.88"), duplicate.similarity());
+                assertEquals("SIMILAR_FUNCTIONALITY", duplicate.relationship());
+                assertEquals(
+                        "Both requirements describe the same login behavior.",
+                        duplicate.reason()
+                );
+                assertEquals(
+                        0,
+                        new BigDecimal("0.90").compareTo(result.confidence())
+                );
+
+                verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
+
+        @Test
+        void detectDuplicatesReturnsEmptyWhenNoDuplicatesFound() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [],
+                        "confidence": 0.93
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                DuplicateDetectionResponse result = provider.detectDuplicates(
+                        new DuplicateDetectionRequest(
+                                targetId,
+                                "The system shall generate monthly reports.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "The system shall allow users to change their password."
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(result.duplicates().isEmpty());
+                assertEquals(new BigDecimal("0.93"), result.confidence());
+        }
+
+        @Test
+        void detectDuplicatesReturnsMultipleDuplicates() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId1 = UUID.randomUUID();
+                UUID candidateId2 = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.91,
+                        "relationship": "SAME_BEHAVIOR",
+                        "reason": "Both describe user authentication."
+                        },
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.84,
+                        "relationship": "OVERLAPPING_REQUIREMENT",
+                        "reason": "Both describe authentication failure handling."
+                        }
+                        ],
+                        "confidence": 0.89
+                        }
+                        """.formatted(candidateId1, candidateId2)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                DuplicateDetectionResponse result = provider.detectDuplicates(
+                        new DuplicateDetectionRequest(
+                                targetId,
+                                "The system shall authenticate users and handle failed login attempts.",
+                                List.of(
+                                        new RequirementCandidate(candidateId1, "Users shall be authenticated."),
+                                        new RequirementCandidate(candidateId2, "The system shall handle failed login attempts.")
+                                )
+                        )
+                );
+
+                assertEquals(2, result.duplicates().size());
+                assertEquals(candidateId1, result.duplicates().get(0).requirementId());
+                assertEquals(candidateId2, result.duplicates().get(1).requirementId());
+                assertEquals(new BigDecimal("0.89"), result.confidence());
+        }
+
+        @Test
+        void detectDuplicatesAllowsEmptyCandidateList() {
+                UUID targetId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [],
+                        "confidence": 0.99
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                DuplicateDetectionResponse result = provider.detectDuplicates(
+                        new DuplicateDetectionRequest(
+                                targetId,
+                                "The system shall generate reports.",
+                                List.of()
+                        )
+                );
+
+                assertTrue(result.duplicates().isEmpty());
+                assertEquals(new BigDecimal("0.99"), result.confidence());
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingDuplicatesArray() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a valid duplicates array"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsInvalidDuplicateObject() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": ["invalid"],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "contained an invalid duplicate"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingRequirementId() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsInvalidRequirementId() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "not-a-uuid",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "invalid requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsUnknownCandidateId() {
+                UUID unknownId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(unknownId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                UUID suppliedCandidateId = UUID.randomUUID();
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        suppliedCandidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "was not supplied as a candidate"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsDuplicateRequirementId() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        },
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.85,
+                        "relationship": "SAME_BEHAVIOR",
+                        "reason": "Same behavior again."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId, candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "returned duplicate requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingSimilarity() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a similarity value"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsSimilarityBelowZero() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": -0.1,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "out of range"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsSimilarityAboveOne() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 1.1,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "out of range"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingRelationship() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "reason": "Same behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a relationship"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingReason() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a reason"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsMissingConfidence() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                        ]
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "confidence"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsConfidenceOutOfRange() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "duplicates": [],
+                        "confidence": 1.1
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "confidence"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesRejectsInvalidJson() {
+                NvidiaChatResponse response = chatResponse(
+                        "not valid json at all"
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectDuplicates(
+                                new DuplicateDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "not valid JSON"
+                        )
+                );
+        }
+
+        @Test
+        void detectDuplicatesHandlesMarkdownCodeFence() {
+        UUID candidateId = UUID.randomUUID();
+
+        NvidiaChatResponse response = chatResponse(
+                """
+                ```json
+                {
+                "duplicates": [
+                        {
+                        "requirementId": "%s",
+                        "similarity": 0.88,
+                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "reason": "Same behavior."
+                        }
+                ],
+                "confidence": 0.90
+                }
+                ```
+                """.formatted(candidateId)
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        DuplicateDetectionResponse result = provider.detectDuplicates(
+                new DuplicateDetectionRequest(
+                        UUID.randomUUID(),
+                        "Some requirement.",
+                        List.of(
+                                new RequirementCandidate(
+                                        candidateId,
+                                        "Candidate requirement."
+                                )
+                        )
+                )
+        );
+
+        assertEquals(1, result.duplicates().size());
+        assertEquals(candidateId, result.duplicates().get(0).requirementId());
+        assertEquals(
+                0,
+                new BigDecimal("0.88")
+                        .compareTo(result.duplicates().get(0).similarity())
+        );
+        }
 
     private NvidiaChatResponse chatResponse(String content) {
         return new NvidiaChatResponse(

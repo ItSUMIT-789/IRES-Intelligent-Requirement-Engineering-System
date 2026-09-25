@@ -15,6 +15,8 @@ import com.ires.ai.dto.analysis.ConflictDetectionRequest;
 import com.ires.ai.dto.analysis.ConflictDetectionResponse;
 import com.ires.ai.dto.analysis.DuplicateDetectionRequest;
 import com.ires.ai.dto.analysis.DuplicateDetectionResponse;
+import com.ires.ai.dto.analysis.DuplicateCandidate;
+import com.ires.ai.dto.analysis.RequirementCandidate;
 import com.ires.ai.dto.analysis.QualityAnalysisRequest;
 import com.ires.ai.dto.analysis.QualityAnalysisResponse;
 import com.ires.ai.dto.analysis.QualityDimension;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.UUID;
 
 public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
 
@@ -642,8 +645,211 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
     public DuplicateDetectionResponse detectDuplicates(
             DuplicateDetectionRequest request
     ) {
-        throw new UnsupportedOperationException(
-                "NVIDIA duplicate detection is not implemented yet."
+        String systemPrompt = """
+                You are a software requirements duplicate detection engine.
+
+                Compare the target software requirement against the supplied
+                candidate requirements.
+
+                Identify candidates that are duplicates or substantially overlap
+                with the target requirement.
+
+                A candidate should be considered a duplicate when it describes
+                essentially the same requirement intent, behavior, business rule,
+                or user workflow, even if the wording differs.
+
+                Do not mark a candidate as a duplicate merely because it belongs
+                to the same feature area or uses similar terminology.
+
+                For every duplicate candidate:
+                - return the exact candidate requirementId
+                - provide a similarity value between 0.0 and 1.0
+                - provide a concise relationship classification
+                - explain why the requirements are duplicates or substantially
+                overlapping
+
+                Use relationship values that describe the relationship, such as:
+                - SIMILAR_FUNCTIONALITY
+                - SAME_BEHAVIOR
+                - OVERLAPPING_REQUIREMENT
+
+                If no candidate is a duplicate:
+                - duplicates must be an empty array
+
+                Respond ONLY with a JSON object in exactly this structure:
+                {
+                "duplicates": [
+                    {
+                    "requirementId": "00000000-0000-0000-0000-000000000001",
+                    "similarity": 0.88,
+                    "relationship": "SIMILAR_FUNCTIONALITY",
+                    "reason": "Both requirements describe the same user-facing behavior."
+                    }
+                ],
+                "confidence": 0.90
+                }
+
+                similarity must be a number between 0.0 and 1.0.
+                confidence must be a number between 0.0 and 1.0.
+
+                Only return requirement IDs that appear in the supplied candidate
+                requirements.
+
+                Do not include markdown.
+                Do not include any text outside the JSON object.
+                """;
+
+        StringBuilder userPrompt = new StringBuilder();
+
+        userPrompt.append("Target requirement:\n")
+                .append(request.targetRequirement())
+                .append("\n\nCandidate requirements:\n");
+
+        if (request.candidateRequirements() == null
+                || request.candidateRequirements().isEmpty()) {
+            userPrompt.append("No candidate requirements were supplied.");
+        } else {
+            for (RequirementCandidate candidate : request.candidateRequirements()) {
+                userPrompt.append("\nCandidate ID: ")
+                        .append(candidate.requirementId())
+                        .append("\nCandidate text: ")
+                        .append(candidate.text())
+                        .append("\n");
+            }
+        }
+
+        NvidiaChatRequest chatRequest = new NvidiaChatRequest(
+                resolveModel(),
+                List.of(
+                        new NvidiaChatMessage("system", systemPrompt),
+                        new NvidiaChatMessage("user", userPrompt.toString())
+                )
+        );
+
+        NvidiaChatResponse chatResponse =
+                client.chatCompletion(chatRequest);
+
+        String content = extractContent(chatResponse);
+        JsonNode json = parseJson(content);
+
+        if (!json.has("duplicates")
+                || json.get("duplicates").isNull()
+                || !json.get("duplicates").isArray()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid duplicates array."
+            );
+        }
+
+        List<DuplicateCandidate> duplicates = new ArrayList<>();
+
+        Set<UUID> candidateIds = new HashSet<>();
+
+        if (request.candidateRequirements() != null) {
+            for (RequirementCandidate candidate :
+                    request.candidateRequirements()) {
+
+                if (candidate != null
+                        && candidate.requirementId() != null) {
+                    candidateIds.add(candidate.requirementId());
+                }
+            }
+        }
+
+        Set<UUID> returnedIds = new HashSet<>();
+
+        for (JsonNode duplicateNode : json.get("duplicates")) {
+            if (duplicateNode == null || !duplicateNode.isObject()) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response contained an invalid duplicate."
+                );
+            }
+
+            if (!duplicateNode.has("requirementId")
+                    || duplicateNode.get("requirementId").isNull()
+                    || duplicateNode.get("requirementId").asText("").isBlank()) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response did not contain a requirementId."
+                );
+            }
+
+            UUID requirementId;
+
+            try {
+                requirementId = UUID.fromString(
+                        duplicateNode.get("requirementId").asText().trim()
+                );
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response contained an invalid requirementId.",
+                        exception
+                );
+            }
+
+            if (!candidateIds.contains(requirementId)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned a requirementId that was not supplied "
+                                + "as a candidate: " + requirementId
+                );
+            }
+
+            if (!returnedIds.add(requirementId)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned duplicate requirementId: "
+                                + requirementId
+                );
+            }
+
+            if (!duplicateNode.has("similarity")
+                    || duplicateNode.get("similarity").isNull()) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response did not contain a similarity value."
+                );
+            }
+
+            BigDecimal similarity;
+
+            try {
+                similarity = duplicateNode.get("similarity").decimalValue();
+            } catch (Exception exception) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response contains an invalid similarity value.",
+                        exception
+                );
+            }
+
+            if (similarity.compareTo(BigDecimal.ZERO) < 0
+                    || similarity.compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalStateException(
+                        "NVIDIA similarity value is out of range [0, 1]: "
+                                + similarity
+                );
+            }
+
+            String relationship = extractDuplicateField(
+                    duplicateNode,
+                    "relationship"
+            );
+
+            String reason = extractDuplicateField(
+                    duplicateNode,
+                    "reason"
+            );
+
+            duplicates.add(
+                    new DuplicateCandidate(
+                            requirementId,
+                            similarity,
+                            relationship,
+                            reason
+                    )
+            );
+        }
+
+        BigDecimal confidence = extractConfidence(json);
+
+        return new DuplicateDetectionResponse(
+                duplicates,
+                confidence
         );
     }
 
@@ -774,6 +980,23 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
                 || node.get(field).asText("").isBlank()) {
             throw new IllegalStateException(
                     "NVIDIA quality dimension did not contain a "
+                            + field + "."
+            );
+        }
+
+        return node.get(field).asText().trim();
+    }
+
+    private String extractDuplicateField(
+            JsonNode node,
+            String field
+    ) {
+        if (node == null
+                || !node.has(field)
+                || node.get(field).isNull()
+                || node.get(field).asText("").isBlank()) {
+            throw new IllegalStateException(
+                    "NVIDIA duplicate response did not contain a "
                             + field + "."
             );
         }
