@@ -15,6 +15,9 @@ import com.ires.ai.dto.analysis.MissingInformation;
 import com.ires.ai.dto.analysis.QualityAnalysisRequest;
 import com.ires.ai.dto.analysis.QualityAnalysisResponse;
 import com.ires.ai.dto.analysis.QualityDimension;
+import com.ires.ai.dto.analysis.ConflictDetectionRequest;
+import com.ires.ai.dto.analysis.ConflictDetectionResponse;
+import com.ires.ai.dto.analysis.ConflictFinding;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -2566,6 +2569,770 @@ class NvidiaAIAnalysisProviderTest {
                         .compareTo(result.duplicates().get(0).similarity())
         );
         }
+
+        @Test
+        void detectConflictsReturnsValidConflict() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "The target permits an action that the candidate prohibits.",
+                        "suggestion": "Clarify which rule takes precedence."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                ConflictDetectionResponse result = provider.detectConflicts(
+                        new ConflictDetectionRequest(
+                                targetId,
+                                "The system shall allow users to export reports.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "The system shall prohibit users from exporting reports."
+                                        )
+                                )
+                        )
+                );
+
+                assertEquals(1, result.conflicts().size());
+
+                ConflictFinding conflict = result.conflicts().get(0);
+
+                assertEquals(candidateId, conflict.requirementId());
+                assertEquals("LOGICAL_CONTRADICTION", conflict.conflictType());
+                assertEquals("HIGH", conflict.severity());
+                assertEquals(
+                        "The target permits an action that the candidate prohibits.",
+                        conflict.reason()
+                );
+                assertEquals(
+                        "Clarify which rule takes precedence.",
+                        conflict.suggestion()
+                );
+                assertEquals(
+                        0,
+                        new BigDecimal("0.90").compareTo(result.confidence())
+                );
+
+                verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
+
+        @Test
+        void detectConflictsReturnsEmptyWhenNoConflictsFound() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [],
+                        "confidence": 0.93
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                ConflictDetectionResponse result = provider.detectConflicts(
+                        new ConflictDetectionRequest(
+                                targetId,
+                                "The system shall generate monthly reports.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "The system shall allow users to change their password."
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(result.conflicts().isEmpty());
+                assertEquals(
+                        0,
+                        new BigDecimal("0.93").compareTo(result.confidence())
+                );
+        }
+
+        @Test
+        void detectConflictsReturnsMultipleConflicts() {
+                UUID targetId = UUID.randomUUID();
+                UUID candidateId1 = UUID.randomUUID();
+                UUID candidateId2 = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "INCOMPATIBLE_BEHAVIOR",
+                        "severity": "HIGH",
+                        "reason": "The requirements specify opposite authentication behavior.",
+                        "suggestion": "Define one authentication rule."
+                        },
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "CONSTRAINT_CONFLICT",
+                        "severity": "MEDIUM",
+                        "reason": "The requirements specify incompatible limits.",
+                        "suggestion": "Establish a single consistent limit."
+                        }
+                        ],
+                        "confidence": 0.89
+                        }
+                        """.formatted(candidateId1, candidateId2)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                ConflictDetectionResponse result = provider.detectConflicts(
+                        new ConflictDetectionRequest(
+                                targetId,
+                                "The system shall authenticate users with the specified policy.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId1,
+                                                "The system shall use an incompatible authentication policy."
+                                        ),
+                                        new RequirementCandidate(
+                                                candidateId2,
+                                                "The system shall enforce a different limit."
+                                        )
+                                )
+                        )
+                );
+
+                assertEquals(2, result.conflicts().size());
+                assertEquals(
+                        candidateId1,
+                        result.conflicts().get(0).requirementId()
+                );
+                assertEquals(
+                        candidateId2,
+                        result.conflicts().get(1).requirementId()
+                );
+                assertEquals(
+                        0,
+                        new BigDecimal("0.89").compareTo(result.confidence())
+                );
+        }
+
+        @Test
+        void detectConflictsAllowsEmptyCandidateList() {
+                UUID targetId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [],
+                        "confidence": 0.99
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                ConflictDetectionResponse result = provider.detectConflicts(
+                        new ConflictDetectionRequest(
+                                targetId,
+                                "The system shall generate reports.",
+                                List.of()
+                        )
+                );
+
+                assertTrue(result.conflicts().isEmpty());
+                assertEquals(
+                        0,
+                        new BigDecimal("0.99").compareTo(result.confidence())
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingConflictsArray() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a valid conflicts array"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsInvalidConflictObject() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": ["invalid"],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "contained an invalid conflict"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingRequirementId() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsInvalidRequirementId() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "not-a-uuid",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "invalid requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsUnknownCandidateId() {
+                UUID unknownId = UUID.randomUUID();
+                UUID suppliedCandidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(unknownId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        suppliedCandidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "was not supplied as a candidate"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsDuplicateRequirementId() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        },
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "INCOMPATIBLE_BEHAVIOR",
+                        "severity": "MEDIUM",
+                        "reason": "Same candidate returned again.",
+                        "suggestion": "Review the conflict."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId, candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "returned duplicate requirementId"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingConflictType() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a conflictType"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingSeverity() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a severity"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingReason() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a reason"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingSuggestion() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain a suggestion"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsMissingConfidence() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ]
+                        }
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of(
+                                                new RequirementCandidate(
+                                                        candidateId,
+                                                        "Candidate requirement."
+                                                )
+                                        )
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "confidence"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsConfidenceOutOfRange() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "conflicts": [],
+                        "confidence": 1.1
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "confidence"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsRejectsInvalidJson() {
+                NvidiaChatResponse response = chatResponse(
+                        "not valid json at all"
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.detectConflicts(
+                                new ConflictDetectionRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement.",
+                                        List.of()
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "not valid JSON"
+                        )
+                );
+        }
+
+        @Test
+        void detectConflictsHandlesMarkdownCodeFence() {
+                UUID candidateId = UUID.randomUUID();
+
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        ```json
+                        {
+                        "conflicts": [
+                        {
+                        "requirementId": "%s",
+                        "conflictType": "LOGICAL_CONTRADICTION",
+                        "severity": "HIGH",
+                        "reason": "Conflicting behavior.",
+                        "suggestion": "Clarify the rule."
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        ```
+                        """.formatted(candidateId)
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                ConflictDetectionResponse result = provider.detectConflicts(
+                        new ConflictDetectionRequest(
+                                UUID.randomUUID(),
+                                "Some requirement.",
+                                List.of(
+                                        new RequirementCandidate(
+                                                candidateId,
+                                                "Candidate requirement."
+                                        )
+                                )
+                        )
+                );
+
+                assertEquals(1, result.conflicts().size());
+                assertEquals(
+                        candidateId,
+                        result.conflicts().get(0).requirementId()
+                );
+                assertEquals(
+                        "LOGICAL_CONTRADICTION",
+                        result.conflicts().get(0).conflictType()
+                );
+                assertEquals(
+                        "HIGH",
+                        result.conflicts().get(0).severity()
+                );
+        }
+
 
     private NvidiaChatResponse chatResponse(String content) {
         return new NvidiaChatResponse(

@@ -13,6 +13,7 @@ import com.ires.ai.dto.analysis.CompletenessResponse;
 import com.ires.ai.dto.analysis.MissingInformation;
 import com.ires.ai.dto.analysis.ConflictDetectionRequest;
 import com.ires.ai.dto.analysis.ConflictDetectionResponse;
+import com.ires.ai.dto.analysis.ConflictFinding;
 import com.ires.ai.dto.analysis.DuplicateDetectionRequest;
 import com.ires.ai.dto.analysis.DuplicateDetectionResponse;
 import com.ires.ai.dto.analysis.DuplicateCandidate;
@@ -857,8 +858,210 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
     public ConflictDetectionResponse detectConflicts(
             ConflictDetectionRequest request
     ) {
-        throw new UnsupportedOperationException(
-                "NVIDIA conflict detection is not implemented yet."
+        String systemPrompt = """
+                You are a software requirements conflict detection engine.
+
+                Compare the target software requirement against the supplied
+                candidate requirements.
+
+                Identify candidates that conflict with the target requirement.
+
+                A conflict exists when two requirements impose incompatible or
+                mutually exclusive behavior, rules, constraints, states, or
+                conditions.
+
+                Examples of conflicts include:
+                - one requirement permits an action while another prohibits it
+                - two requirements specify incompatible values or limits
+                - two requirements require mutually exclusive system behavior
+                - one requirement requires a condition that another requirement
+                explicitly forbids
+
+                Do not mark a candidate as a conflict merely because the
+                requirements are different, related, or describe different
+                features.
+
+                For every conflict:
+                - return the exact candidate requirementId
+                - provide a concise conflictType
+                - provide a severity
+                - explain why the requirements conflict
+                - provide a suggestion for resolving or clarifying the conflict
+
+                Use conflictType values that describe the conflict, such as:
+                - LOGICAL_CONTRADICTION
+                - INCOMPATIBLE_BEHAVIOR
+                - CONSTRAINT_CONFLICT
+                - POLICY_CONFLICT
+
+                Use severity values:
+                - LOW
+                - MEDIUM
+                - HIGH
+
+                If no candidate conflicts with the target requirement:
+                - conflicts must be an empty array
+
+                Respond ONLY with a JSON object in exactly this structure:
+                {
+                "conflicts": [
+                    {
+                    "requirementId": "00000000-0000-0000-0000-000000000001",
+                    "conflictType": "LOGICAL_CONTRADICTION",
+                    "severity": "HIGH",
+                    "reason": "The target permits an action that the candidate explicitly prohibits.",
+                    "suggestion": "Clarify which rule takes precedence."
+                    }
+                ],
+                "confidence": 0.90
+                }
+
+                confidence must be a number between 0.0 and 1.0.
+
+                Only return requirement IDs that appear in the supplied candidate
+                requirements.
+
+                Do not include markdown.
+                Do not include any text outside the JSON object.
+                """;
+
+        StringBuilder userPrompt = new StringBuilder();
+
+        userPrompt.append("Target requirement:\n")
+                .append(request.targetRequirement())
+                .append("\n\nCandidate requirements:\n");
+
+        if (request.candidateRequirements() == null
+                || request.candidateRequirements().isEmpty()) {
+            userPrompt.append("No candidate requirements were supplied.");
+        } else {
+            for (RequirementCandidate candidate :
+                    request.candidateRequirements()) {
+                userPrompt.append("\nCandidate ID: ")
+                        .append(candidate.requirementId())
+                        .append("\nCandidate text: ")
+                        .append(candidate.text())
+                        .append("\n");
+            }
+        }
+
+        NvidiaChatRequest chatRequest = new NvidiaChatRequest(
+                resolveModel(),
+                List.of(
+                        new NvidiaChatMessage("system", systemPrompt),
+                        new NvidiaChatMessage("user", userPrompt.toString())
+                )
+        );
+
+        NvidiaChatResponse chatResponse =
+                client.chatCompletion(chatRequest);
+
+        String content = extractContent(chatResponse);
+        JsonNode json = parseJson(content);
+
+        if (!json.has("conflicts")
+                || json.get("conflicts").isNull()
+                || !json.get("conflicts").isArray()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid conflicts array."
+            );
+        }
+
+        List<ConflictFinding> conflicts = new ArrayList<>();
+
+        Set<UUID> candidateIds = new HashSet<>();
+
+        if (request.candidateRequirements() != null) {
+            for (RequirementCandidate candidate :
+                    request.candidateRequirements()) {
+
+                if (candidate != null
+                        && candidate.requirementId() != null) {
+                    candidateIds.add(candidate.requirementId());
+                }
+            }
+        }
+
+        Set<UUID> returnedIds = new HashSet<>();
+
+        for (JsonNode conflictNode : json.get("conflicts")) {
+            if (conflictNode == null || !conflictNode.isObject()) {
+                throw new IllegalStateException(
+                        "NVIDIA conflict response contained an invalid conflict."
+                );
+            }
+
+            if (!conflictNode.has("requirementId")
+                    || conflictNode.get("requirementId").isNull()
+                    || conflictNode.get("requirementId").asText("").isBlank()) {
+                throw new IllegalStateException(
+                        "NVIDIA conflict response did not contain a requirementId."
+                );
+            }
+
+            UUID requirementId;
+
+            try {
+                requirementId = UUID.fromString(
+                        conflictNode.get("requirementId").asText().trim()
+                );
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalStateException(
+                        "NVIDIA conflict response contained an invalid requirementId.",
+                        exception
+                );
+            }
+
+            if (!candidateIds.contains(requirementId)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned a requirementId that was not supplied "
+                                + "as a candidate: " + requirementId
+                );
+            }
+
+            if (!returnedIds.add(requirementId)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned duplicate requirementId: "
+                                + requirementId
+                );
+            }
+
+            String conflictType = extractConflictField(
+                    conflictNode,
+                    "conflictType"
+            );
+
+            String severity = extractConflictField(
+                    conflictNode,
+                    "severity"
+            );
+
+            String reason = extractConflictField(
+                    conflictNode,
+                    "reason"
+            );
+
+            String suggestion = extractConflictField(
+                    conflictNode,
+                    "suggestion"
+            );
+
+            conflicts.add(
+                    new ConflictFinding(
+                            requirementId,
+                            conflictType,
+                            severity,
+                            reason,
+                            suggestion
+                    )
+            );
+        }
+
+        BigDecimal confidence = extractConfidence(json);
+
+        return new ConflictDetectionResponse(
+                conflicts,
+                confidence
         );
     }
 
@@ -997,6 +1200,23 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
                 || node.get(field).asText("").isBlank()) {
             throw new IllegalStateException(
                     "NVIDIA duplicate response did not contain a "
+                            + field + "."
+            );
+        }
+
+        return node.get(field).asText().trim();
+    }
+
+    private String extractConflictField(
+            JsonNode node,
+            String field
+    ) {
+        if (node == null
+                || !node.has(field)
+                || node.get(field).isNull()
+                || node.get(field).asText("").isBlank()) {
+            throw new IllegalStateException(
+                    "NVIDIA conflict response did not contain a "
                             + field + "."
             );
         }
