@@ -5,6 +5,9 @@ import com.ires.ai.dto.analysis.AmbiguityRequest;
 import com.ires.ai.dto.analysis.AmbiguityResponse;
 import com.ires.ai.dto.analysis.ClassificationRequest;
 import com.ires.ai.dto.analysis.ClassificationResponse;
+import com.ires.ai.dto.analysis.CompletenessRequest;
+import com.ires.ai.dto.analysis.CompletenessResponse;
+import com.ires.ai.dto.analysis.MissingInformation;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -690,6 +693,524 @@ class NvidiaAIAnalysisProviderTest {
         assertEquals("quickly", result.findings().get(0).text());
         assertEquals(new BigDecimal("0.88"), result.confidence());
     }
+
+        @Test
+        void analyzeCompletenessReturnsMissingInformation() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling",
+                        "description": "The requirement does not specify what should happen when processing fails."
+                        }
+                ],
+                "clarificationQuestions": [
+                        "What should the system do when processing fails?"
+                ],
+                "confidence": 0.86
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        CompletenessResponse result = provider.analyzeCompleteness(
+                new CompletenessRequest(
+                        UUID.randomUUID(),
+                        "The system shall process uploaded files."
+                )
+        );
+
+        assertFalse(result.isComplete());
+        assertEquals(1, result.missingInformation().size());
+
+        MissingInformation missing = result.missingInformation().get(0);
+
+        assertEquals("Error Handling", missing.aspect());
+        assertEquals(
+                "The requirement does not specify what should happen when processing fails.",
+                missing.description()
+        );
+
+        assertEquals(1, result.clarificationQuestions().size());
+        assertEquals(
+                "What should the system do when processing fails?",
+                result.clarificationQuestions().get(0)
+        );
+
+        assertEquals(new BigDecimal("0.86"), result.confidence());
+
+        verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
+
+        @Test
+        void analyzeCompletenessReturnsCompleteRequirement() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": true,
+                "missingInformation": [],
+                "clarificationQuestions": [],
+                "confidence": 0.95
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        CompletenessResponse result = provider.analyzeCompleteness(
+                new CompletenessRequest(
+                        UUID.randomUUID(),
+                        "The system shall return a response within 2 seconds and display an error message if processing fails."
+                )
+        );
+
+        assertTrue(result.isComplete());
+        assertTrue(result.missingInformation().isEmpty());
+        assertTrue(result.clarificationQuestions().isEmpty());
+        assertEquals(new BigDecimal("0.95"), result.confidence());
+        }
+
+        @Test
+        void analyzeCompletenessMapsMultipleMissingInformationItems() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Input Validation",
+                        "description": "The requirement does not define valid input constraints."
+                        },
+                        {
+                        "aspect": "Error Handling",
+                        "description": "The requirement does not define behavior when processing fails."
+                        }
+                ],
+                "clarificationQuestions": [
+                        "What input values are valid?",
+                        "What should happen when processing fails?"
+                ],
+                "confidence": 0.91
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        CompletenessResponse result = provider.analyzeCompleteness(
+                new CompletenessRequest(
+                        UUID.randomUUID(),
+                        "The system shall process user input."
+                )
+        );
+
+        assertFalse(result.isComplete());
+        assertEquals(2, result.missingInformation().size());
+        assertEquals(2, result.clarificationQuestions().size());
+
+        assertEquals(
+                "Input Validation",
+                result.missingInformation().get(0).aspect()
+        );
+
+        assertEquals(
+                "Error Handling",
+                result.missingInformation().get(1).aspect()
+        );
+
+        assertEquals(
+                "What input values are valid?",
+                result.clarificationQuestions().get(0)
+        );
+
+        assertEquals(
+                "What should happen when processing fails?",
+                result.clarificationQuestions().get(1)
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsMissingIsComplete() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "missingInformation": [],
+                "clarificationQuestions": [],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("isComplete"));
+        }
+
+        @Test
+        void analyzeCompletenessRejectsInvalidMissingInformation() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": "Error handling",
+                "clarificationQuestions": [
+                        "What should happen on failure?"
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("missingInformation")
+        );
+        }
+        @Test
+        void analyzeCompletenessRejectsIncompleteMissingInformation() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling"
+                        }
+                ],
+                "clarificationQuestions": [
+                        "What should happen on failure?"
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("description"));
+        }
+
+        @Test
+        void analyzeCompletenessRejectsInvalidClarificationQuestion() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling",
+                        "description": "Failure behavior is not specified."
+                        }
+                ],
+                "clarificationQuestions": [
+                        ""
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("clarification question")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsMissingClarificationQuestions() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling",
+                        "description": "Failure behavior is not specified."
+                        }
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("clarificationQuestions")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsCompleteWithMissingInformation() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": true,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling",
+                        "description": "Failure behavior is not specified."
+                        }
+                ],
+                "clarificationQuestions": [],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("isComplete is true")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsCompleteWithClarificationQuestions() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": true,
+                "missingInformation": [],
+                "clarificationQuestions": [
+                        "What should happen on failure?"
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("isComplete is true")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsIncompleteWithoutMissingInformation() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [],
+                "clarificationQuestions": [
+                        "What should happen on failure?"
+                ],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("isComplete is false")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsIncompleteWithoutClarificationQuestions() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": false,
+                "missingInformation": [
+                        {
+                        "aspect": "Error Handling",
+                        "description": "Failure behavior is not specified."
+                        }
+                ],
+                "clarificationQuestions": [],
+                "confidence": 0.90
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("isComplete is false")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsConfidenceOutOfRange() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                {
+                "isComplete": true,
+                "missingInformation": [],
+                "clarificationQuestions": [],
+                "confidence": 1.5
+                }
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("out of range")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessRejectsInvalidJson() {
+        NvidiaChatResponse response =
+                chatResponse("not valid json at all");
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.analyzeCompleteness(
+                        new CompletenessRequest(
+                                UUID.randomUUID(),
+                                "Some requirement."
+                        )
+                )
+        );
+
+        assertTrue(
+                exception.getMessage().contains("not valid JSON")
+        );
+        }
+
+        @Test
+        void analyzeCompletenessStripsMarkdownCodeFences() {
+        NvidiaChatResponse response = chatResponse(
+                """
+                ```json
+                {
+                "isComplete": true,
+                "missingInformation": [],
+                "clarificationQuestions": [],
+                "confidence": 0.88
+                }
+                ```
+                """
+        );
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        CompletenessResponse result = provider.analyzeCompleteness(
+                new CompletenessRequest(
+                        UUID.randomUUID(),
+                        "The system shall return a response within 2 seconds."
+                )
+        );
+
+        assertTrue(result.isComplete());
+        assertTrue(result.missingInformation().isEmpty());
+        assertTrue(result.clarificationQuestions().isEmpty());
+        assertEquals(new BigDecimal("0.88"), result.confidence());
+        }
+
     private NvidiaChatResponse chatResponse(String content) {
         return new NvidiaChatResponse(
                 List.of(new NvidiaChatResponse.Choice(

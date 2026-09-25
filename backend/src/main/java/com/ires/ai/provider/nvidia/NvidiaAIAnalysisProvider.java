@@ -10,6 +10,7 @@ import com.ires.ai.dto.analysis.ClassificationRequest;
 import com.ires.ai.dto.analysis.ClassificationResponse;
 import com.ires.ai.dto.analysis.CompletenessRequest;
 import com.ires.ai.dto.analysis.CompletenessResponse;
+import com.ires.ai.dto.analysis.MissingInformation;
 import com.ires.ai.dto.analysis.ConflictDetectionRequest;
 import com.ires.ai.dto.analysis.ConflictDetectionResponse;
 import com.ires.ai.dto.analysis.DuplicateDetectionRequest;
@@ -228,8 +229,179 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
     public CompletenessResponse analyzeCompleteness(
             CompletenessRequest request
     ) {
-        throw new UnsupportedOperationException(
-                "NVIDIA completeness analysis is not implemented yet."
+        String systemPrompt = """
+                You are a software requirements completeness analysis engine.
+
+                Analyze the supplied software requirement and determine whether
+                it contains enough information for implementation and objective
+                verification.
+
+                A requirement may be incomplete when important information is
+                missing, such as:
+                - required inputs
+                - expected outputs
+                - business rules
+                - processing behavior
+                - validation rules
+                - error handling
+                - boundary conditions
+                - security requirements
+                - performance requirements
+                - constraints
+                - dependencies
+                - acceptance conditions
+
+                Do not mark a requirement incomplete merely because it does not
+                specify information that is irrelevant to its stated behavior.
+
+                If the requirement contains enough information for implementation
+                and objective verification:
+                - isComplete must be true
+                - missingInformation must be an empty array
+                - clarificationQuestions must be an empty array
+
+                If important information is missing:
+                - isComplete must be false
+                - identify each important missing aspect
+                - provide a useful clarification question for each important gap
+
+                Respond ONLY with a JSON object in exactly this structure:
+                {
+                "isComplete": false,
+                "missingInformation": [
+                    {
+                    "aspect": "Error Handling",
+                    "description": "The requirement does not specify what should happen when processing fails."
+                    }
+                ],
+                "clarificationQuestions": [
+                    "What should the system do when processing fails?"
+                ],
+                "confidence": 0.0
+                }
+
+                confidence must be a number between 0.0 and 1.0.
+                Do not include markdown.
+                Do not include any text outside the JSON object.
+                """;
+
+        String userPrompt =
+                "Analyze this software requirement for completeness:\n\n"
+                        + request.text();
+
+        NvidiaChatRequest chatRequest = new NvidiaChatRequest(
+                resolveModel(),
+                List.of(
+                        new NvidiaChatMessage("system", systemPrompt),
+                        new NvidiaChatMessage("user", userPrompt)
+                )
+        );
+
+        NvidiaChatResponse chatResponse =
+                client.chatCompletion(chatRequest);
+
+        String content = extractContent(chatResponse);
+        JsonNode json = parseJson(content);
+
+        if (!json.has("isComplete")
+                || json.get("isComplete").isNull()
+                || !json.get("isComplete").isBoolean()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid isComplete value."
+            );
+        }
+
+        boolean isComplete = json.get("isComplete").booleanValue();
+
+        if (!json.has("missingInformation")
+                || json.get("missingInformation").isNull()
+                || !json.get("missingInformation").isArray()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid missingInformation array."
+            );
+        }
+
+        List<MissingInformation> missingInformation = new ArrayList<>();
+
+        for (JsonNode missingNode : json.get("missingInformation")) {
+            String aspect = extractCompletenessField(
+                    missingNode,
+                    "aspect"
+            );
+
+            String description = extractCompletenessField(
+                    missingNode,
+                    "description"
+            );
+
+            missingInformation.add(
+                    new MissingInformation(
+                            aspect,
+                            description
+                    )
+            );
+        }
+
+        if (!json.has("clarificationQuestions")
+                || json.get("clarificationQuestions").isNull()
+                || !json.get("clarificationQuestions").isArray()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid clarificationQuestions array."
+            );
+        }
+
+        List<String> clarificationQuestions = new ArrayList<>();
+
+        for (JsonNode questionNode : json.get("clarificationQuestions")) {
+            if (questionNode == null
+                    || questionNode.isNull()
+                    || !questionNode.isTextual()
+                    || questionNode.asText("").isBlank()) {
+                throw new IllegalStateException(
+                        "NVIDIA completeness response contained an invalid clarification question."
+                );
+            }
+
+            clarificationQuestions.add(
+                    questionNode.asText().trim()
+            );
+        }
+
+        if (isComplete && !missingInformation.isEmpty()) {
+            throw new IllegalStateException(
+                    "NVIDIA response is inconsistent: isComplete is true "
+                            + "but missing information was returned."
+            );
+        }
+
+        if (isComplete && !clarificationQuestions.isEmpty()) {
+            throw new IllegalStateException(
+                    "NVIDIA response is inconsistent: isComplete is true "
+                            + "but clarification questions were returned."
+            );
+        }
+
+        if (!isComplete && missingInformation.isEmpty()) {
+            throw new IllegalStateException(
+                    "NVIDIA response is inconsistent: isComplete is false "
+                            + "but no missing information was returned."
+            );
+        }
+
+        if (!isComplete && clarificationQuestions.isEmpty()) {
+            throw new IllegalStateException(
+                    "NVIDIA response is inconsistent: isComplete is false "
+                            + "but no clarification questions were returned."
+            );
+        }
+
+        BigDecimal confidence = extractConfidence(json);
+
+        return new CompletenessResponse(
+                isComplete,
+                missingInformation,
+                clarificationQuestions,
+                confidence
         );
     }
 
@@ -348,8 +520,24 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
                             + field + "."
             );
         }
-
         return findingNode.get(field).asText().trim();
+    }
+
+    private String extractCompletenessField(
+            JsonNode node,
+            String field
+    ) {
+        if (node == null
+                || !node.has(field)
+                || node.get(field).isNull()
+                || node.get(field).asText("").isBlank()) {
+            throw new IllegalStateException(
+                    "NVIDIA completeness response did not contain a "
+                            + field + "."
+            );
+        }
+
+        return node.get(field).asText().trim();
     }
 
     private BigDecimal extractConfidence(JsonNode json) {
