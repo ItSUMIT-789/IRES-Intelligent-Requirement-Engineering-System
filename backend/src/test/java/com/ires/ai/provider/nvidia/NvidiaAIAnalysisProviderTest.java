@@ -8,6 +8,9 @@ import com.ires.ai.dto.analysis.ClassificationResponse;
 import com.ires.ai.dto.analysis.CompletenessRequest;
 import com.ires.ai.dto.analysis.CompletenessResponse;
 import com.ires.ai.dto.analysis.MissingInformation;
+import com.ires.ai.dto.analysis.QualityAnalysisRequest;
+import com.ires.ai.dto.analysis.QualityAnalysisResponse;
+import com.ires.ai.dto.analysis.QualityDimension;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -1210,6 +1213,590 @@ class NvidiaAIAnalysisProviderTest {
         assertTrue(result.clarificationQuestions().isEmpty());
         assertEquals(new BigDecimal("0.88"), result.confidence());
         }
+
+        @Test
+        void analyzeQualityReturnsValidQualityAnalysis() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 82,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 85,
+                        "finding": "The requirement is mostly clear.",
+                        "recommendation": "Replace vague terms with measurable criteria."
+                        },
+                        {
+                        "name": "Specificity",
+                        "score": 80,
+                        "finding": "Some behavior is underspecified.",
+                        "recommendation": "Define the expected behavior explicitly."
+                        },
+                        {
+                        "name": "Testability",
+                        "score": 78,
+                        "finding": "The requirement lacks measurable acceptance conditions.",
+                        "recommendation": "Add objective conditions that can be verified through testing."
+                        },
+                        {
+                        "name": "Consistency",
+                        "score": 90,
+                        "finding": "The requirement does not contain an internal contradiction.",
+                        "recommendation": "Maintain the current consistent structure."
+                        },
+                        {
+                        "name": "Atomicity",
+                        "score": 80,
+                        "finding": "The requirement contains one main behavior.",
+                        "recommendation": "Separate unrelated behaviors if additional behavior is introduced."
+                        }
+                        ],
+                        "confidence": 0.91
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                QualityAnalysisResponse result = provider.analyzeQuality(
+                        new QualityAnalysisRequest(
+                                UUID.randomUUID(),
+                                "The system shall process user requests."
+                        )
+                );
+
+                assertEquals(82, result.overallScore());
+                assertEquals(5, result.dimensions().size());
+                assertEquals(new BigDecimal("0.91"), result.confidence());
+
+                assertEquals("Clarity", result.dimensions().get(0).name());
+                assertEquals(85, result.dimensions().get(0).score());
+                assertEquals(
+                        "The requirement is mostly clear.",
+                        result.dimensions().get(0).finding()
+                );
+                assertEquals(
+                        "Replace vague terms with measurable criteria.",
+                        result.dimensions().get(0).recommendation()
+                );
+
+                verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
+
+        @Test
+        void analyzeQualityMapsAllRequiredDimensions() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 75,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 70,
+                        "finding": "Finding 1",
+                        "recommendation": "Recommendation 1"
+                        },
+                        {
+                        "name": "Specificity",
+                        "score": 72,
+                        "finding": "Finding 2",
+                        "recommendation": "Recommendation 2"
+                        },
+                        {
+                        "name": "Testability",
+                        "score": 74,
+                        "finding": "Finding 3",
+                        "recommendation": "Recommendation 3"
+                        },
+                        {
+                        "name": "Consistency",
+                        "score": 76,
+                        "finding": "Finding 4",
+                        "recommendation": "Recommendation 4"
+                        },
+                        {
+                        "name": "Atomicity",
+                        "score": 78,
+                        "finding": "Finding 5",
+                        "recommendation": "Recommendation 5"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                QualityAnalysisResponse result = provider.analyzeQuality(
+                        new QualityAnalysisRequest(
+                                UUID.randomUUID(),
+                                "The system shall process user requests."
+                        )
+                );
+
+                assertEquals(
+                        List.of(
+                                "Clarity",
+                                "Specificity",
+                                "Testability",
+                                "Consistency",
+                                "Atomicity"
+                        ),
+                        result.dimensions().stream()
+                                .map(QualityDimension::name)
+                                .toList()
+                );
+
+                assertEquals(
+                        List.of(70, 72, 74, 76, 78),
+                        result.dimensions().stream()
+                                .map(QualityDimension::score)
+                                .toList()
+                );
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingOverallScore() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "dimensions": [],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("overallScore"));
+        }
+
+        @Test
+        void analyzeQualityRejectsInvalidOverallScore() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": "high",
+                        "dimensions": [],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("overallScore"));
+        }
+
+        @Test
+        void analyzeQualityRejectsOverallScoreBelowZero() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": -1,
+                        "dimensions": [],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("out of range"));
+        }
+
+        @Test
+        void analyzeQualityRejectsOverallScoreAbove100() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 101,
+                        "dimensions": [],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("out of range"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingDimensions() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("dimensions"));
+        }
+
+        @Test
+        void analyzeQualityRejectsInvalidDimensionObject() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        "Clarity"
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("invalid dimension"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingDimensionName() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "score": 80,
+                        "finding": "Finding",
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("name"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingDimensionScore() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "finding": "Finding",
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("score"));
+        }
+
+        @Test
+        void analyzeQualityRejectsDimensionScoreOutOfRange() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 101,
+                        "finding": "Finding",
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("out of range"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingFinding() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 80,
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("finding"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingRecommendation() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 80,
+                        "finding": "Finding"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("recommendation"));
+        }
+
+        @Test
+        void analyzeQualityRejectsUnsupportedDimension() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Readability",
+                        "score": 80,
+                        "finding": "Finding",
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("unsupported quality dimension"));
+        }
+
+        @Test
+        void analyzeQualityRejectsDuplicateDimension() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 80,
+                        "finding": "Finding 1",
+                        "recommendation": "Recommendation 1"
+                        },
+                        {
+                        "name": "Clarity",
+                        "score": 70,
+                        "finding": "Finding 2",
+                        "recommendation": "Recommendation 2"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(exception.getMessage().contains("duplicate quality dimension"));
+        }
+
+        @Test
+        void analyzeQualityRejectsMissingRequiredDimension() {
+                NvidiaChatResponse response = chatResponse(
+                        """
+                        {
+                        "overallScore": 80,
+                        "dimensions": [
+                        {
+                        "name": "Clarity",
+                        "score": 80,
+                        "finding": "Finding",
+                        "recommendation": "Recommendation"
+                        }
+                        ],
+                        "confidence": 0.90
+                        }
+                        """
+                );
+
+                when(client.chatCompletion(any())).thenReturn(response);
+
+                IllegalStateException exception = assertThrows(
+                        IllegalStateException.class,
+                        () -> provider.analyzeQuality(
+                                new QualityAnalysisRequest(
+                                        UUID.randomUUID(),
+                                        "Some requirement."
+                                )
+                        )
+                );
+
+                assertTrue(
+                        exception.getMessage().contains(
+                                "did not contain exactly the required"
+                        )
+                );
+        }
+
 
     private NvidiaChatResponse chatResponse(String content) {
         return new NvidiaChatResponse(

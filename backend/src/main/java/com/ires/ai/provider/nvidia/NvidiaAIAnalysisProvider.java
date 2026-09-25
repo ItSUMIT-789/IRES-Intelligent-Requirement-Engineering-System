@@ -17,6 +17,7 @@ import com.ires.ai.dto.analysis.DuplicateDetectionRequest;
 import com.ires.ai.dto.analysis.DuplicateDetectionResponse;
 import com.ires.ai.dto.analysis.QualityAnalysisRequest;
 import com.ires.ai.dto.analysis.QualityAnalysisResponse;
+import com.ires.ai.dto.analysis.QualityDimension;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatMessage;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
 
@@ -409,8 +411,230 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
     public QualityAnalysisResponse analyzeQuality(
             QualityAnalysisRequest request
     ) {
-        throw new UnsupportedOperationException(
-                "NVIDIA quality analysis is not implemented yet."
+        String systemPrompt = """
+                You are a software requirements quality analysis engine.
+
+                Analyze the supplied software requirement against five quality
+                dimensions:
+
+                1. Clarity
+                The requirement should be understandable and free from vague
+                or subjective wording.
+
+                2. Specificity
+                The requirement should define precise behavior, constraints,
+                inputs, outputs, and measurable conditions where relevant.
+
+                3. Testability
+                The requirement should be objectively verifiable through tests,
+                inspection, or measurable acceptance conditions.
+
+                4. Consistency
+                The requirement should not contain contradictory statements,
+                incompatible constraints, or internally inconsistent behavior.
+
+                5. Atomicity
+                The requirement should express one coherent requirement rather
+                than combining multiple independent requirements unnecessarily.
+
+                Score each dimension from 0 to 100.
+
+                The overallScore must be a 0 to 100 assessment of the requirement
+                across all five dimensions.
+
+                For every dimension provide:
+                - name
+                - score
+                - finding explaining the observed quality
+                - recommendation for improvement
+
+                Use the exact dimension names:
+                Clarity
+                Specificity
+                Testability
+                Consistency
+                Atomicity
+
+                Respond ONLY with a JSON object in exactly this structure:
+                {
+                "overallScore": 82,
+                "dimensions": [
+                    {
+                    "name": "Clarity",
+                    "score": 85,
+                    "finding": "The requirement is mostly clear.",
+                    "recommendation": "Replace vague terms with measurable criteria."
+                    },
+                    {
+                    "name": "Specificity",
+                    "score": 80,
+                    "finding": "Some behavior is underspecified.",
+                    "recommendation": "Define the expected behavior explicitly."
+                    },
+                    {
+                    "name": "Testability",
+                    "score": 78,
+                    "finding": "The requirement lacks measurable acceptance conditions.",
+                    "recommendation": "Add objective conditions that can be verified through testing."
+                    },
+                    {
+                    "name": "Consistency",
+                    "score": 90,
+                    "finding": "The requirement does not contain an internal contradiction.",
+                    "recommendation": "Maintain the current consistent structure."
+                    },
+                    {
+                    "name": "Atomicity",
+                    "score": 80,
+                    "finding": "The requirement contains one main behavior.",
+                    "recommendation": "Separate unrelated behaviors if additional behavior is introduced."
+                    }
+                ],
+                "confidence": 0.91
+                }
+
+                overallScore and every dimension score must be integers between
+                0 and 100.
+
+                confidence must be a number between 0.0 and 1.0.
+
+                Do not include markdown.
+                Do not include any text outside the JSON object.
+                """;
+
+        String userPrompt =
+                "Analyze this software requirement for quality:\n\n"
+                        + request.text();
+
+        NvidiaChatRequest chatRequest = new NvidiaChatRequest(
+                resolveModel(),
+                List.of(
+                        new NvidiaChatMessage("system", systemPrompt),
+                        new NvidiaChatMessage("user", userPrompt)
+                )
+        );
+
+        NvidiaChatResponse chatResponse =
+                client.chatCompletion(chatRequest);
+
+        String content = extractContent(chatResponse);
+        JsonNode json = parseJson(content);
+
+        if (!json.has("overallScore")
+                || json.get("overallScore").isNull()
+                || !json.get("overallScore").canConvertToInt()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid overallScore."
+            );
+        }
+
+        int overallScore = json.get("overallScore").intValue();
+
+        if (overallScore < 0 || overallScore > 100) {
+            throw new IllegalStateException(
+                    "NVIDIA overallScore is out of range [0, 100]: "
+                            + overallScore
+            );
+        }
+
+        if (!json.has("dimensions")
+                || json.get("dimensions").isNull()
+                || !json.get("dimensions").isArray()) {
+            throw new IllegalStateException(
+                    "NVIDIA response did not contain a valid dimensions array."
+            );
+        }
+
+        List<QualityDimension> dimensions = new ArrayList<>();
+
+        Set<String> requiredDimensions = Set.of(
+                "Clarity",
+                "Specificity",
+                "Testability",
+                "Consistency",
+                "Atomicity"
+        );
+
+        Set<String> returnedDimensions = new HashSet<>();
+
+        for (JsonNode dimensionNode : json.get("dimensions")) {
+            if (dimensionNode == null || !dimensionNode.isObject()) {
+                throw new IllegalStateException(
+                        "NVIDIA quality response contained an invalid dimension."
+                );
+            }
+
+            String name = extractQualityField(
+                    dimensionNode,
+                    "name"
+            );
+
+            String scoreField = "score";
+
+            if (!dimensionNode.has(scoreField)
+                    || dimensionNode.get(scoreField).isNull()
+                    || !dimensionNode.get(scoreField).canConvertToInt()) {
+                throw new IllegalStateException(
+                        "NVIDIA quality dimension did not contain a valid score."
+                );
+            }
+
+            int score = dimensionNode.get(scoreField).intValue();
+
+            if (score < 0 || score > 100) {
+                throw new IllegalStateException(
+                        "NVIDIA quality dimension score is out of range [0, 100]: "
+                                + score
+                );
+            }
+
+            String finding = extractQualityField(
+                    dimensionNode,
+                    "finding"
+            );
+
+            String recommendation = extractQualityField(
+                    dimensionNode,
+                    "recommendation"
+            );
+
+            if (!requiredDimensions.contains(name)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned an unsupported quality dimension: "
+                                + name
+                );
+            }
+
+            if (!returnedDimensions.add(name)) {
+                throw new IllegalStateException(
+                        "NVIDIA returned duplicate quality dimension: "
+                                + name
+                );
+            }
+
+            dimensions.add(
+                    new QualityDimension(
+                            name,
+                            score,
+                            finding,
+                            recommendation
+                    )
+            );
+        }
+
+        if (!returnedDimensions.equals(requiredDimensions)) {
+            throw new IllegalStateException(
+                    "NVIDIA quality response did not contain exactly the required "
+                            + "quality dimensions."
+            );
+        }
+
+        BigDecimal confidence = extractConfidence(json);
+
+        return new QualityAnalysisResponse(
+                overallScore,
+                dimensions,
+                confidence
         );
     }
 
@@ -539,6 +763,24 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
 
         return node.get(field).asText().trim();
     }
+
+    private String extractQualityField(
+            JsonNode node,
+            String field
+    ) {
+        if (node == null
+                || !node.has(field)
+                || node.get(field).isNull()
+                || node.get(field).asText("").isBlank()) {
+            throw new IllegalStateException(
+                    "NVIDIA quality dimension did not contain a "
+                            + field + "."
+            );
+        }
+
+        return node.get(field).asText().trim();
+    }
+
 
     private BigDecimal extractConfidence(JsonNode json) {
         if (!json.has("confidence") || json.get("confidence").isNull()) {
