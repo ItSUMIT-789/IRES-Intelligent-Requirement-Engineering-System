@@ -86,8 +86,11 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
     void persistsEachCapabilityResponseToItsMatchingJsonField() {
         when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(analysisRepository.findByRequirementId(requirement.getId())).thenReturn(Optional.of(analysis));
-        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+        when(analysisRepository.saveAndFlush(any(RequirementAIAnalysis.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
+
+                when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+                        .thenAnswer(invocation -> invocation.getArgument(0));
         UUID candidateId = UUID.randomUUID();
         Requirement candidate = requirement("Candidate requirement", "Candidate details");
         candidate.setId(candidateId);
@@ -139,8 +142,11 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
     void providerFailurePersistsFailedStatusAndPropagatesServiceUnavailable() {
         when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(analysisRepository.findByRequirementId(requirement.getId())).thenReturn(Optional.of(analysis));
-        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+        when(analysisRepository.saveAndFlush(any(RequirementAIAnalysis.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
+
+        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(analysisProvider.classify(any())).thenThrow(new IllegalStateException("offline"));
 
         assertThatThrownBy(() -> analysisService.classify(requirement.getId()))
@@ -186,7 +192,10 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
     void emptyAndNullCandidateListsReachProviderAsEmptyCandidatesAndTargetIsExcluded() {
         when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(analysisRepository.findByRequirementId(requirement.getId())).thenReturn(Optional.of(analysis));
-        when(analysisRepository.save(any(RequirementAIAnalysis.class)))
+        when(analysisRepository.saveAndFlush(any(RequirementAIAnalysis.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+when(analysisRepository.save(any(RequirementAIAnalysis.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
         when(analysisProvider.detectDuplicates(any())).thenReturn(
                 new DuplicateDetectionResponse(List.of(), new BigDecimal("0.90")));
@@ -211,6 +220,8 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
 
         when(requirementRepository.findById(titleOnlyRequirement.getId())).thenReturn(Optional.of(titleOnlyRequirement));
         when(analysisRepository.findByRequirementId(titleOnlyRequirement.getId())).thenReturn(Optional.of(titleAnalysis));
+        when(analysisRepository.saveAndFlush(any(RequirementAIAnalysis.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(analysisRepository.save(any(RequirementAIAnalysis.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(analysisProvider.classify(any())).thenReturn(
@@ -239,6 +250,8 @@ class RequirementAIAnalysisCapabilitiesServiceTest {
 
         when(requirementRepository.findById(requirement.getId())).thenReturn(Optional.of(requirement));
         when(analysisRepository.findByRequirementId(requirement.getId())).thenReturn(Optional.of(analysis));
+        when(analysisRepository.saveAndFlush(any(RequirementAIAnalysis.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(analysisRepository.save(any(RequirementAIAnalysis.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 

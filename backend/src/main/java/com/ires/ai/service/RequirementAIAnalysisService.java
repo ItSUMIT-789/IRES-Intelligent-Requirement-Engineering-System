@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.time.Instant;
 import java.util.List;
@@ -74,69 +75,120 @@ public class RequirementAIAnalysisService {
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
     public ClassificationResponse classify(UUID requirementId) {
         Requirement requirement = findRequirement(requirementId);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             ClassificationResponse response = analysisProvider.classify(
                     new ClassificationRequest(requirement.getId(), requirementText(requirement)));
+
             analysis.setClassificationResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Classification could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Classification", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Classification", exception);
+            }
+            throw exception;
         }
     }
 
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
     public AmbiguityResponse detectAmbiguity(UUID requirementId) {
         Requirement requirement = findRequirement(requirementId);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             AmbiguityResponse response = analysisProvider.detectAmbiguity(
                     new AmbiguityRequest(requirement.getId(), requirementText(requirement)));
+
             analysis.setAmbiguityResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Ambiguity detection could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Ambiguity detection", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Ambiguity detection", exception);
+            }
+            throw exception;
         }
     }
 
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
     public CompletenessResponse analyzeCompleteness(UUID requirementId) {
         Requirement requirement = findRequirement(requirementId);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             CompletenessResponse response = analysisProvider.analyzeCompleteness(
                     new CompletenessRequest(requirement.getId(), requirementText(requirement)));
+
             analysis.setCompletenessResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Completeness analysis could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Completeness analysis", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Completeness analysis", exception);
+            }
+            throw exception;
         }
     }
 
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
     public QualityAnalysisResponse analyzeQuality(UUID requirementId) {
         Requirement requirement = findRequirement(requirementId);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             QualityAnalysisResponse response = analysisProvider.analyzeQuality(
                     new QualityAnalysisRequest(requirement.getId(), requirementText(requirement)));
+
             analysis.setQualityResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Quality analysis could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Quality analysis", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Quality analysis", exception);
+            }
+            throw exception;
         }
     }
 
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
-    public DuplicateDetectionResponse detectDuplicates(UUID requirementId, List<UUID> candidateRequirementIds) {
+    public DuplicateDetectionResponse detectDuplicates(
+            UUID requirementId,
+            List<UUID> candidateRequirementIds) {
+
         Requirement requirement = findRequirement(requirementId);
-        List<RequirementCandidate> candidates = candidateRequirements(requirement.getId(), candidateRequirementIds);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        List<RequirementCandidate> candidates =
+                candidateRequirements(requirementId, candidateRequirementIds);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             DuplicateDetectionResponse response = analysisProvider.detectDuplicates(
                     new DuplicateDetectionRequest(
                             requirement.getId(),
@@ -144,20 +196,36 @@ public class RequirementAIAnalysisService {
                             candidates
                     )
             );
+
             analysis.setDuplicateResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Duplicate detection could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Duplicate detection", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Duplicate detection", exception);
+            }
+            throw exception;
         }
     }
 
     @Transactional(noRollbackFor = ServiceUnavailableException.class)
-    public ConflictDetectionResponse detectConflicts(UUID requirementId, List<UUID> candidateRequirementIds) {
+    public ConflictDetectionResponse detectConflicts(
+            UUID requirementId,
+            List<UUID> candidateRequirementIds) {
+
         Requirement requirement = findRequirement(requirementId);
-        List<RequirementCandidate> candidates = candidateRequirements(requirement.getId(), candidateRequirementIds);
-        RequirementAIAnalysis analysis = startAnalysis(requirement);
+        List<RequirementCandidate> candidates =
+                candidateRequirements(requirementId, candidateRequirementIds);
+        RequirementAIAnalysis analysis = null;
+
         try {
+            analysis = startAnalysis(requirement);
+
             ConflictDetectionResponse response = analysisProvider.detectConflicts(
                     new ConflictDetectionRequest(
                             requirement.getId(),
@@ -165,11 +233,20 @@ public class RequirementAIAnalysisService {
                             candidates
                     )
             );
+
             analysis.setConflictResult(asJson(response));
             completeAnalysis(analysis);
             return response;
+
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new ServiceUnavailableException(
+                    "Conflict detection could not be completed because another AI analysis is already in progress."
+            );
         } catch (RuntimeException exception) {
-            throw analysisFailed(analysis, "Conflict detection", exception);
+            if (analysis != null) {
+                throw analysisFailed(analysis, "Conflict detection", exception);
+            }
+            throw exception;
         }
     }
 
@@ -189,7 +266,7 @@ public class RequirementAIAnalysisService {
         RequirementAIAnalysis analysis = analysisRepository.findByRequirementId(requirement.getId())
                 .orElseGet(() -> new RequirementAIAnalysis(requirement));
         analysis.setAnalysisStatus(AnalysisStatus.PROCESSING);
-        return analysisRepository.save(analysis);
+        return analysisRepository.saveAndFlush(analysis);
     }
 
     private void completeAnalysis(RequirementAIAnalysis analysis) {

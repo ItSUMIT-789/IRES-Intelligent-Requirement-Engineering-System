@@ -20,6 +20,11 @@ import com.ires.ai.dto.analysis.ConflictDetectionResponse;
 import com.ires.ai.dto.analysis.ConflictFinding;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatRequest;
 import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
+import com.ires.ai.service.AIAnalysisProvider;
+import com.ires.requirement.entity.Requirement;
+import com.ires.requirement.entity.RequirementPriority;
+import com.ires.requirement.entity.RequirementStatus;
+import com.ires.requirement.entity.RequirementType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +47,50 @@ class NvidiaAIAnalysisProviderTest {
         client = mock(NvidiaApiClient.class);
         provider = new NvidiaAIAnalysisProvider(client, "test-model");
     }
+
+    @Test
+    void legacyAnalyzeReturnsAnalysisResult() {
+        NvidiaChatResponse response = chatResponse("""
+                {
+                "summary": "The requirement describes a clear login capability.",
+                "ambiguityScore": 15.0,
+                "completenessScore": 85.0,
+                "qualityScore": 90.0,
+                "suggestions": "Define the expected behavior for failed login attempts."
+                }
+                """);
+
+        when(client.chatCompletion(any())).thenReturn(response);
+
+        Requirement requirement = new Requirement(
+                null,
+                "User Login",
+                "The system shall allow users to log in using their registered email and password.",
+                RequirementType.FUNCTIONAL,
+                RequirementPriority.MEDIUM,
+                RequirementStatus.DRAFT,
+                "TEST",
+                null,
+                null
+        );
+
+        AIAnalysisProvider.AIAnalysisResult result =
+                provider.analyze(requirement);
+
+        assertEquals(
+                "THE REQUIREMENT DESCRIBES A CLEAR LOGIN CAPABILITY.",
+                result.summary()
+        );
+        assertEquals(new BigDecimal("15.0"), result.ambiguityScore());
+        assertEquals(new BigDecimal("85.0"), result.completenessScore());
+        assertEquals(new BigDecimal("90.0"), result.qualityScore());
+        assertEquals(
+                "DEFINE THE EXPECTED BEHAVIOR FOR FAILED LOGIN ATTEMPTS.",
+                result.suggestions()
+        );
+
+        verify(client).chatCompletion(any(NvidiaChatRequest.class));
+        }
 
     @Test
     void classifyReturnsValidClassification() {
@@ -1817,7 +1866,7 @@ class NvidiaAIAnalysisProviderTest {
                         {
                         "requirementId": "%s",
                         "similarity": 0.88,
-                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "relationship": "SAME_BEHAVIOR",
                         "reason": "Both requirements describe the same login behavior."
                         }
                         ],
@@ -1847,7 +1896,7 @@ class NvidiaAIAnalysisProviderTest {
 
                 assertEquals(candidateId, duplicate.requirementId());
                 assertEquals(new BigDecimal("0.88"), duplicate.similarity());
-                assertEquals("SIMILAR_FUNCTIONALITY", duplicate.relationship());
+                assertEquals("SAME_BEHAVIOR", duplicate.relationship());
                 assertEquals(
                         "Both requirements describe the same login behavior.",
                         duplicate.reason()
@@ -1912,7 +1961,7 @@ class NvidiaAIAnalysisProviderTest {
                         {
                         "requirementId": "%s",
                         "similarity": 0.84,
-                        "relationship": "OVERLAPPING_REQUIREMENT",
+                        "relationship": "SAME_BEHAVIOR",
                         "reason": "Both describe authentication failure handling."
                         }
                         ],
@@ -2161,7 +2210,7 @@ class NvidiaAIAnalysisProviderTest {
                         {
                         "requirementId": "%s",
                         "similarity": 0.88,
-                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "relationship": "SAME_BEHAVIOR",
                         "reason": "Same behavior."
                         },
                         {
@@ -2434,7 +2483,7 @@ class NvidiaAIAnalysisProviderTest {
                         {
                         "requirementId": "%s",
                         "similarity": 0.88,
-                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "relationship": "SAME_BEHAVIOR",
                         "reason": "Same behavior."
                         }
                         ]
@@ -2608,7 +2657,7 @@ class NvidiaAIAnalysisProviderTest {
                         {
                         "requirementId": "%s",
                         "similarity": 0.88,
-                        "relationship": "SIMILAR_FUNCTIONALITY",
+                        "relationship": "SAME_BEHAVIOR",
                         "reason": "Same behavior."
                         }
                 ],

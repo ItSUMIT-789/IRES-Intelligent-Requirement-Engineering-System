@@ -81,8 +81,10 @@ public class AIAnalysisProviderConfiguration {
         }
 
         if ("jev".equalsIgnoreCase(provider)) {
-            return jevAIAnalysisProvider;
-        }
+        throw new IllegalArgumentException(
+                "Jev AI analysis provider is not available for all required capabilities."
+        );
+}
 
         if ("nvidia".equalsIgnoreCase(provider)) {
             return nvidiaAIAnalysisProvider;

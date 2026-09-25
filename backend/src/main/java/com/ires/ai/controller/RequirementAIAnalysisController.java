@@ -55,68 +55,93 @@ public class RequirementAIAnalysisController {
 
     @PostMapping("/api/v1/requirements/{requirementId}/ai/classify")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public ClassificationResponse classify(
+    public ApiResponse<ClassificationResponse> classify(
             @PathVariable UUID requirementId,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        return analysisService.classify(requirementId);
+        return ApiResponse.success(
+        "Requirement classification completed.",
+        analysisService.classify(requirementId)
+);
     }
 
     @PostMapping("/api/v1/requirements/{requirementId}/ai/ambiguity")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public AmbiguityResponse detectAmbiguity(
+    public ApiResponse<AmbiguityResponse> detectAmbiguity(
             @PathVariable UUID requirementId,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        return analysisService.detectAmbiguity(requirementId);
+
+        return ApiResponse.success(
+                "Requirement ambiguity analysis completed.",
+                analysisService.detectAmbiguity(requirementId)
+        );
     }
 
     @PostMapping("/api/v1/requirements/{requirementId}/ai/completeness")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public CompletenessResponse analyzeCompleteness(
+    public ApiResponse<CompletenessResponse> analyzeCompleteness(
             @PathVariable UUID requirementId,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        return analysisService.analyzeCompleteness(requirementId);
+
+        return ApiResponse.success(
+                "Requirement completeness analysis completed.",
+                analysisService.analyzeCompleteness(requirementId)
+        );
     }
 
-    @PostMapping("/api/v1/requirements/{requirementId}/ai/quality")
+   @PostMapping("/api/v1/requirements/{requirementId}/ai/quality")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public QualityAnalysisResponse analyzeQuality(
+    public ApiResponse<QualityAnalysisResponse> analyzeQuality(
             @PathVariable UUID requirementId,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
-        return analysisService.analyzeQuality(requirementId);
+
+        return ApiResponse.success(
+                "Requirement quality analysis completed.",
+                analysisService.analyzeQuality(requirementId)
+        );
     }
 
-    @PostMapping("/api/v1/requirements/{requirementId}/ai/duplicates")
+   @PostMapping("/api/v1/requirements/{requirementId}/ai/duplicates")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public DuplicateDetectionResponse detectDuplicates(
+    public ApiResponse<DuplicateDetectionResponse> detectDuplicates(
             @PathVariable UUID requirementId,
             @RequestBody CandidateRequirementsRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
+
         List<UUID> candidateRequirementIds = candidateRequirementIds(request);
         assertCandidatesAccessible(candidateRequirementIds, principal);
-        return analysisService.detectDuplicates(requirementId, candidateRequirementIds);
+
+        return ApiResponse.success(
+                "Requirement duplicate detection completed.",
+                analysisService.detectDuplicates(requirementId, candidateRequirementIds)
+        );
     }
 
     @PostMapping("/api/v1/requirements/{requirementId}/ai/conflicts")
     @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_ANALYST')")
-    public ConflictDetectionResponse detectConflicts(
+    public ApiResponse<ConflictDetectionResponse> detectConflicts(
             @PathVariable UUID requirementId,
             @RequestBody CandidateRequirementsRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
         assertAccessible(requirementId, principal);
+
         List<UUID> candidateRequirementIds = candidateRequirementIds(request);
         assertCandidatesAccessible(candidateRequirementIds, principal);
-        return analysisService.detectConflicts(requirementId, candidateRequirementIds);
+
+        return ApiResponse.success(
+                "Requirement conflict detection completed.",
+                analysisService.detectConflicts(requirementId, candidateRequirementIds)
+        );
     }
 
     private List<UUID> candidateRequirementIds(CandidateRequirementsRequest request) {

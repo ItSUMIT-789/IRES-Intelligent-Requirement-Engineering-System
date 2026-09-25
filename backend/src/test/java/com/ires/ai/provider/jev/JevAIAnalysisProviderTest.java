@@ -2,11 +2,15 @@ package com.ires.ai.provider.jev;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ires.ai.dto.analysis.AmbiguityFinding;
+import com.ires.ai.dto.analysis.AmbiguityRequest;
+import com.ires.ai.dto.analysis.AmbiguityResponse;
 import com.ires.ai.dto.analysis.ClassificationRequest;
 import com.ires.ai.dto.analysis.ClassificationResponse;
 import com.ires.ai.provider.jev.dto.JevDecisionRequest;
 import com.ires.ai.provider.jev.dto.JevDecisionResponse;
 import org.junit.jupiter.api.Test;
+
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -17,6 +21,7 @@ import static org.mockito.Mockito.*;
 
 class JevAIAnalysisProviderTest {
 
+    private static final UUID REQUIREMENT_ID = UUID.randomUUID();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
@@ -321,4 +326,108 @@ class JevAIAnalysisProviderTest {
                     );
         }));
     }
+
+    @Test
+    void detectAmbiguityIsExplicitlyUnsupported() {
+        JevApiClient client = mock(JevApiClient.class);
+        JevAIAnalysisProvider provider = new JevAIAnalysisProvider(client, "typesafe-ai/jev");
+
+        AmbiguityRequest request = new AmbiguityRequest(
+                REQUIREMENT_ID,
+                "The system shall respond quickly."
+        );
+
+        UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+                () -> provider.detectAmbiguity(request)
+        );
+
+        assertEquals(
+                "Jev ambiguity detection is not implemented yet.",
+                exception.getMessage()
+        );
+    }
+
+
+    @Test
+void classifyRejectsUnsupportedClassification() throws Exception {
+    JevApiClient client = mock(JevApiClient.class);
+
+    JsonNode data = objectMapper.readTree("""
+            {
+              "answers": {
+                "classification": {
+                  "choice": "INVALID_TYPE",
+                  "confidence": 0.90
+                }
+              }
+            }
+            """);
+
+    when(client.decide(any(JevDecisionRequest.class)))
+            .thenReturn(new JevDecisionResponse(
+                    0,
+                    "Decision completed",
+                    data
+            ));
+
+    JevAIAnalysisProvider provider =
+            new JevAIAnalysisProvider(client, "typesafe-ai/jev");
+
+    IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> provider.classify(
+                    new ClassificationRequest(
+                            UUID.randomUUID(),
+                            "The system shall allow users to log in."
+                    )
+            )
+    );
+
+    assertEquals(
+            "Jev response contained an unsupported classification: INVALID_TYPE",
+            exception.getMessage()
+    );
+}
+
+        @Test
+        void classifyRejectsConfidenceOutsideRange() throws Exception {
+        JevApiClient client = mock(JevApiClient.class);
+
+        JsonNode data = objectMapper.readTree("""
+                {
+                "answers": {
+                        "classification": {
+                        "choice": "FUNCTIONAL",
+                        "confidence": 1.5
+                        }
+                }
+                }
+                """);
+
+        when(client.decide(any(JevDecisionRequest.class)))
+                .thenReturn(new JevDecisionResponse(
+                        0,
+                        "Decision completed",
+                        data
+                ));
+
+        JevAIAnalysisProvider provider =
+                new JevAIAnalysisProvider(client, "typesafe-ai/jev");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.classify(
+                        new ClassificationRequest(
+                                UUID.randomUUID(),
+                                "The system shall allow users to log in."
+                        )
+                )
+        );
+
+        assertEquals(
+                "Jev response contained an invalid classification confidence: 1.5",
+                exception.getMessage()
+        );
+        }
 }

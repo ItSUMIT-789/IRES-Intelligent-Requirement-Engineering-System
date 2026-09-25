@@ -22,6 +22,7 @@ import com.ires.requirement.entity.Requirement;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class JevAIAnalysisProvider implements AIAnalysisProvider {
 
@@ -98,6 +99,24 @@ public class JevAIAnalysisProvider implements AIAnalysisProvider {
         BigDecimal confidence = answer.has("confidence")
                 ? answer.get("confidence").decimalValue()
                 : BigDecimal.ZERO;
+        if (!Set.of(
+                "FUNCTIONAL",
+                "NON_FUNCTIONAL",
+                "BUSINESS",
+                "TECHNICAL",
+                "UNCLEAR"
+        ).contains(classification)) {
+        throw new IllegalStateException(
+                "Jev response contained an unsupported classification: " + classification
+        );
+        }
+
+        if (confidence.compareTo(BigDecimal.ZERO) < 0
+                || confidence.compareTo(BigDecimal.ONE) > 0) {
+        throw new IllegalStateException(
+                "Jev response contained an invalid classification confidence: " + confidence
+        );
+        }
 
         String reason = switch (classification) {
             case "FUNCTIONAL" ->

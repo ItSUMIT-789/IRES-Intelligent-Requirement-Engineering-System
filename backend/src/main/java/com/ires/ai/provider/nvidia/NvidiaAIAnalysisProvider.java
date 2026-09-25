@@ -27,6 +27,7 @@ import com.ires.ai.provider.nvidia.dto.NvidiaChatResponse;
 import com.ires.ai.service.AIAnalysisProvider;
 import com.ires.requirement.entity.Requirement;
 
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
@@ -944,6 +945,12 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
                     "reason"
             );
 
+            if (!"SAME_BEHAVIOR".equals(relationship)) {
+                throw new IllegalStateException(
+                        "NVIDIA duplicate response contained a non-duplicate relationship: " + relationship
+                );
+            }
+
             duplicates.add(
                     new DuplicateCandidate(
                             requirementId,
@@ -1175,11 +1182,92 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
 
     @Override
     public AIAnalysisResult analyze(Requirement requirement) {
-        throw new UnsupportedOperationException(
-                "Legacy AI analysis is not implemented by the NVIDIA provider."
-        );
-    }
+        if (requirement == null) {
+                throw new IllegalArgumentException("Requirement must not be null.");
+        }
 
+        String title = requirement.getTitle() == null
+                ? ""
+                : requirement.getTitle();
+
+        String description = requirement.getDescription() == null
+                ? ""
+                : requirement.getDescription();
+
+        String systemPrompt = """
+                You are a software requirements analysis engine.
+
+                Analyze the supplied software requirement and return ONLY
+                a valid JSON object.
+
+                The JSON must contain exactly these fields:
+                {
+                "summary": "brief analysis summary",
+                "ambiguityScore": 0.0,
+                "completenessScore": 0.0,
+                "qualityScore": 0.0,
+                "suggestions": "improvement suggestions"
+                }
+
+                Score fields must be numbers between 0.0 and 100.0.
+
+                ambiguityScore:
+                0 means completely clear and precise.
+                100 means highly ambiguous or vague.
+
+                completenessScore:
+                0 means very incomplete.
+                100 means complete enough for implementation and testing.
+
+                qualityScore:
+                0 means very poor quality.
+                100 means excellent requirement quality.
+
+                Do not include markdown.
+                Do not include any text outside the JSON object.
+                """;
+
+        String userPrompt = """
+                Analyze this software requirement.
+
+                Title:
+                %s
+
+                Description:
+                %s
+                """.formatted(title, description);
+
+        NvidiaChatRequest chatRequest = new NvidiaChatRequest(
+                resolveModel(),
+                List.of(
+                        new NvidiaChatMessage("system", systemPrompt),
+                        new NvidiaChatMessage("user", userPrompt)
+                )
+        );
+
+        NvidiaChatResponse chatResponse =
+                client.chatCompletion(chatRequest);
+
+        String content = extractContent(chatResponse);
+        JsonNode json = parseJson(content);
+
+        String summary = extractRequiredString(json, "summary");
+        BigDecimal ambiguityScore =
+                extractScore(json, "ambiguityScore");
+        BigDecimal completenessScore =
+                extractScore(json, "completenessScore");
+        BigDecimal qualityScore =
+                extractScore(json, "qualityScore");
+        String suggestions = extractRequiredString(json, "suggestions");
+
+        return new AIAnalysisResult(
+                summary,
+                ambiguityScore,
+                completenessScore,
+                qualityScore,
+                suggestions
+        );
+        }
     private String resolveModel() {
         if (model == null || model.isBlank()) {
             throw new IllegalStateException(
@@ -1236,6 +1324,32 @@ public class NvidiaAIAnalysisProvider implements AIAnalysisProvider {
             );
         }
     }
+
+    private BigDecimal extractScore(
+                JsonNode json,
+                String field
+        ) {
+        if (!json.has(field)
+                || json.get(field).isNull()
+                || !json.get(field).isNumber()) {
+                throw new IllegalStateException(
+                        "NVIDIA response did not contain a numeric "
+                                + field + "."
+                );
+        }
+
+        BigDecimal score = json.get(field).decimalValue();
+
+        if (score.compareTo(BigDecimal.ZERO) < 0
+                || score.compareTo(new BigDecimal("100.00")) > 0) {
+                throw new IllegalStateException(
+                        "NVIDIA response contained an invalid "
+                                + field + ": " + score
+                );
+        }
+
+        return score;
+        }
 
     private String extractRequiredString(JsonNode json, String field) {
         if (!json.has(field)
