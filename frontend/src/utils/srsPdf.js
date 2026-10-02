@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 
-export function generateSrsPdf({ projectName, requirements, userStories, traceability }) {
+export function generateSrsPdf({ projectName, requirements, userStories, traceability, srsDocument }) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const margin = 48
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -48,6 +48,27 @@ export function generateSrsPdf({ projectName, requirements, userStories, traceab
       { size: 9.5, color: '#374151', gap: 16 }
     )
   })
+
+  if (srsDocument?.content) {
+    const content = srsDocument.content
+    addLine('4. Reviewed SRS Document', { size: 14, bold: true, gap: 20 })
+    addLine(srsDocument.title || content.title || 'Software Requirements Specification', { size: 12, bold: true, gap: 18 })
+    const sections = [
+      ['Overview', content.overview],
+      ['Functional Requirements', content.functionalRequirements],
+      ['Non-Functional Requirements', content.nonFunctionalRequirements],
+      ['Business Requirements', content.businessRequirements],
+      ['Technical Requirements', content.technicalRequirements],
+      ['Assumptions', content.assumptions],
+      ['Constraints', content.constraints],
+    ]
+    sections.forEach(([heading, value]) => {
+      if (value == null) return
+      addLine(heading, { size: 11, bold: true, gap: 15 })
+      const entries = Array.isArray(value) ? value : [value]
+      entries.forEach((entry) => addLine(String(entry), { size: 9.5, color: '#374151', gap: 14 }))
+    })
+  }
 
   return doc
 }

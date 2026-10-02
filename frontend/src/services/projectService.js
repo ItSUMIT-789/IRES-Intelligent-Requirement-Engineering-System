@@ -7,6 +7,7 @@ export const projectService = {
     return apiClient.get(`/projects${query ? `?${query}` : ''}`)
   },
   getProject: (id) => apiClient.get(`/projects/${id}`),
+  generateSrs: (projectId) => apiClient.post(`/projects/${projectId}/srs/generate`, {}),
   updateProject: (id, project) => apiClient.put(`/projects/${id}`, project),
   deleteProject: (id) => apiClient.delete(`/projects/${id}`),
   addProjectMember: (projectId, member) => apiClient.post(`/projects/${projectId}/members`, member),
